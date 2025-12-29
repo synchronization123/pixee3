@@ -1,0 +1,9 @@
+{
+  "provider": "openrouter",
+  "api_key": "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",
+  "model": "xiaomi/mimo-v2-flash:free",
+  "api_url": "https://openrouter.ai/api/v1/chat/completions",
+  "temperature": 0.3,
+  "max_tokens": 3000,
+  "timeout": 60
+}
