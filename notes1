@@ -1,110 +1,15 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
-import docx  # Requires python-docx library: pip install python-docx
-import subprocess
-import os
+You are a expert prompt engineer.
+Develop python pyw script.
+Write a prompt to generate application security test cases only from given context.
+In context we have design input requirement (or also called functional specifications document) in docx format, it will have mockups/images, user stories, bdd tests, etc
+Second document is Design Specifications document it has class diagram, actual logic to be implemented. Next document is functional tests document which gives insights or the functionalities.
+Next we have pull request where actual added code is  shared with you.
 
-def create_prompt(transcript, attendees, non_attendees):
-    prompt = f"""
-You are an expert in converting meeting transcripts to structured meeting minutes in HTML format.
-Stick strictly to the provided transcript as your only source of truth. Do not add any information, context, or details from outside the transcript. No hallucinations allowed.
+And lastly the story title and story description is shared.
+I want you to generate test cases only for the given story and description, pull request code that will be shared , take reference from all the documents shared but limit output only to specific story context only, donot get deviated from context of specific user story, description and pull request code.
+Output will be generated properly.
 
-If any parts of the transcript are in Hindi, translate them accurately to English while preserving the meaning.
+This documents are imported using each browse buttons and feed to codex cli which generates output in html.
+Ui is developed in python pyw
 
-From the transcript, identify and mark the attendees based on mentions of participants speaking or being present. Use the user-provided attendees and non-attendees lists to override or supplement if needed.
-
-The meeting minutes should include all standard elements as per industry standards for meeting notes, such as:
-
-- Meeting Title (infer from transcript if mentioned, otherwise use a generic title like "Meeting Notes")
-- Date and Time (extract from transcript if available)
-- Location (if mentioned in transcript)
-- Attendees (list based on transcript and user input)
-- Non-Attendees/Absentees (if mentioned in transcript or provided by user)
-- Agenda/Topics Discussed (summarize points discussed, including what was said by whom)
-- Key Discussions (detail who discussed what, quoting or paraphrasing from transcript)
-- Decisions Made (if any)
-- Action Items (list any tasks, assigned to whom, with deadlines if specified in transcript)
-- Next Steps or Follow-ups (if mentioned)
-- Any other relevant details from the transcript (e.g., votes, approvals, etc.)
-
-Output ONLY the meeting minutes in clean, professional HTML format. Use appropriate HTML tags like <h1> for title, <ul> for lists, <table> for action items if needed, etc. Do not include any additional text outside the HTML.
-
-Transcript:
-{transcript}
-
-User-updated Attendees: {attendees}
-
-User-updated Non-Attendees: {non_attendees}
-"""
-    return prompt
-
-def extract_transcript_from_docx(file_path):
-    try:
-        doc = docx.Document(file_path)
-        transcript = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-        return transcript
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to read DOCX file: {str(e)}")
-        return None
-
-def generate_notes():
-    file_path = file_entry.get()
-    if not file_path:
-        messagebox.showerror("Error", "Please select a DOCX file.")
-        return
-
-    transcript = extract_transcript_from_docx(file_path)
-    if not transcript:
-        return
-
-    attendees = attendees_text.get("1.0", tk.END).strip()
-    non_attendees = non_attendees_text.get("1.0", tk.END).strip()
-
-    prompt = create_prompt(transcript, attendees, non_attendees)
-
-    # Save prompt to a temporary file in current folder
-    prompt_file = "meeting_prompt.txt"
-    with open(prompt_file, "w", encoding="utf-8") as f:
-        f.write(prompt)
-
-    # Assume codex cli command: codex generate --input meeting_prompt.txt --output meeting_notes.html
-    # Adjust the command below based on actual codex cli syntax. This is a placeholder.
-    try:
-        result = subprocess.run(["codex", "generate", "--input", prompt_file, "--output", "meeting_notes.html"], 
-                                capture_output=True, text=True, check=True)
-        if result.returncode == 0:
-            messagebox.showinfo("Success", "Meeting notes generated in meeting_notes.html")
-        else:
-            messagebox.showerror("Error", f"Codex CLI failed: {result.stderr}")
-    except FileNotFoundError:
-        messagebox.showerror("Error", "Codex CLI not found. Ensure it's installed and in PATH.")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to run Codex CLI: {str(e)}")
-
-    # Clean up prompt file if desired
-    # os.remove(prompt_file)
-
-# GUI Setup
-root = tk.Tk()
-root.title("Meeting Notes Generator")
-
-# File selection
-tk.Label(root, text="Select Transcription DOCX:").grid(row=0, column=0, padx=10, pady=5)
-file_entry = tk.Entry(root, width=50)
-file_entry.grid(row=0, column=1, padx=10, pady=5)
-tk.Button(root, text="Browse", command=lambda: file_entry.insert(0, filedialog.askopenfilename(filetypes=[("DOCX files", "*.docx")]))).grid(row=0, column=2, padx=10, pady=5)
-
-# Attendees textbox
-tk.Label(root, text="Update Attendees (comma-separated):").grid(row=1, column=0, padx=10, pady=5)
-attendees_text = tk.Text(root, height=5, width=50)
-attendees_text.grid(row=1, column=1, columnspan=2, padx=10, pady=5)
-
-# Non-attendees textbox
-tk.Label(root, text="Update Non-Attendees (comma-separated):").grid(row=2, column=0, padx=10, pady=5)
-non_attendees_text = tk.Text(root, height=5, width=50)
-non_attendees_text.grid(row=2, column=1, columnspan=2, padx=10, pady=5)
-
-# Generate button
-tk.Button(root, text="Generate Meeting Notes", command=generate_notes).grid(row=3, column=1, pady=20)
-
-root.mainloop()
+Also reference for test cases can be taken from wstg.xlsx, asvs.xlsx , mstg.xlsx, msvs.xlsx stored in current folder and also in output last column do mentioned the reference number which was considered while generating test cases of given story context.
