@@ -1,15 +1,1 @@
-You are a expert prompt engineer.
-Develop python pyw script.
-Write a prompt to generate application security test cases only from given context.
-In context we have design input requirement (or also called functional specifications document) in docx format, it will have mockups/images, user stories, bdd tests, etc
-Second document is Design Specifications document it has class diagram, actual logic to be implemented. Next document is functional tests document which gives insights or the functionalities.
-Next we have pull request where actual added code is  shared with you.
-
-And lastly the story title and story description is shared.
-I want you to generate test cases only for the given story and description, pull request code that will be shared , take reference from all the documents shared but limit output only to specific story context only, donot get deviated from context of specific user story, description and pull request code.
-Output will be generated properly.
-
-This documents are imported using each browse buttons and feed to codex cli which generates output in html.
-Ui is developed in python pyw
-
-Also reference for test cases can be taken from wstg.xlsx, asvs.xlsx , mstg.xlsx, msvs.xlsx stored in current folder and also in output last column do mentioned the reference number which was considered while generating test cases of given story context.
+curl -s https://raw.githubusercontent.com/CVEProject/cvelist/master/2026/21000_21999/CVE-2026-21962.json | jq '{cve_id: .CVE_data_meta.ID, description: .descriptions[0].value, cvss: .metrics.cvssMetricV31[0].cvssData.baseScore}'
