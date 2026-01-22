@@ -1,6 +1,6 @@
 import requests
 import json
-import time  # Added for rate limiting
+import time  # For rate limiting
 from typing import Dict, Set
 
 BASE_URL = "https://www.opencre.org/rest/v1"
@@ -12,63 +12,78 @@ def fetch_cre(cre_id: str) -> Dict:
     url = f"{BASE_URL}/id/{cre_id}?format=json"
     response = requests.get(url)
     response.raise_for_status()
-    return response.json()
+    return response.json().get('data', {})
 
-def collect_all_cres(root_data: Dict, collected: Dict[str, Dict], visited: Set[str]):
+def collect_all_cres(root_data: list, collected: Dict[str, Dict], visited: Set[str]):
     """Recursively collect all CREs from the hierarchy."""
     for cre in root_data:
         cre_id = cre.get('id')
-        if cre_id in visited:
+        if not cre_id or cre_id in visited:
             continue
         visited.add(cre_id)
         
-        # Fetch full details if not already collected
+        # Store full details if not already collected
         if cre_id not in collected:
-            full_cre = fetch_cre(cre_id)
-            collected[cre_id] = full_cre
+            collected[cre_id] = cre  # Use the provided cre if full, but since root has links, assume it's sufficient; else fetch
         
-        # Recurse on linked CREs (e.g., 'Contains' or 'Related')
+        # Recurse on linked CREs (only if doctype is CRE and ltype is Contains or Related)
         links = cre.get('links', [])
         for link in links:
-            if link.get('ltype') in ['Contains', 'Related']:  # Adjust types as needed
+            if link.get('ltype') in ['Contains', 'Related']:
                 linked_cre = link.get('document', {})
-                linked_id = linked_cre.get('id')
-                if linked_id and linked_id not in visited:
-                    # Fetch and recurse
-                    linked_full = fetch_cre(linked_id)
-                    collect_all_cres([linked_full], collected, visited)
+                if linked_cre.get('doctype') == 'CRE':
+                    linked_id = linked_cre.get('id')
+                    if linked_id and linked_id not in visited:
+                        # Fetch full linked CRE
+                        linked_full = fetch_cre(linked_id)
+                        collect_all_cres([linked_full], collected, visited)
+
+def fetch_all_standards_for_name(std_name: str) -> list:
+    """Fetch all sections for a standard, handling pagination."""
+    all_sections = []
+    page = 1
+    while True:
+        time.sleep(RATE_LIMIT_DELAY)  # Rate limit
+        url = f"{BASE_URL}/standard/{std_name}?format=json&page={page}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        standards_page = data.get('standards', [])
+        all_sections.extend(standards_page)
+        total_pages = data.get('total_pages')
+        if total_pages is None or page >= total_pages:
+            break
+        page += 1
+    return all_sections
 
 def main():
     # Fetch root CREs
     root_url = f"{BASE_URL}/root_cres?format=json"
     response = requests.get(root_url)
     response.raise_for_status()
-    root_data = response.json()
+    root_data = response.json().get('data', [])
     
-    # Collect all
+    # Collect all CREs
     collected_cres = {}
     visited_ids = set()
     collect_all_cres(root_data, collected_cres, visited_ids)
     
-    # Optionally, fetch all standards for completeness (not always linked in CREs)
+    # Fetch all standards for completeness
     standards_url = f"{BASE_URL}/standards"
     time.sleep(RATE_LIMIT_DELAY)  # Rate limit
     standards_response = requests.get(standards_url)
     if standards_response.status_code == 200:
-        standards = standards_response.json()
+        standards = standards_response.json()  # List of standard names
         collected_cres['standards'] = {}
         for std in standards:
-            time.sleep(RATE_LIMIT_DELAY)  # Rate limit per standard fetch
-            std_url = f"{BASE_URL}/standard/{std}?format=json"
-            std_resp = requests.get(std_url)
-            if std_resp.status_code == 200:
-                collected_cres['standards'][std] = std_resp.json()
+            sections = fetch_all_standards_for_name(std)
+            collected_cres['standards'][std] = sections
     
     # Save to JSON file
     with open('opencre_all_data.json', 'w', encoding='utf-8') as f:
         json.dump(collected_cres, f, indent=4)
     
-    print(f"Downloaded {len(collected_cres)} CREs (plus standards) to opencre_all_data.json")
+    print(f"Downloaded {len(collected_cres.get('standards', {}))} standards and {len(visited_ids)} CREs to opencre_all_data.json")
 
 if __name__ == "__main__":
     main()
