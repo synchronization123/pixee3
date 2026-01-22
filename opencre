@@ -1,0 +1,74 @@
+import requests
+import json
+import time  # Added for rate limiting
+from typing import Dict, Set
+
+BASE_URL = "https://www.opencre.org/rest/v1"
+RATE_LIMIT_DELAY = 1  # Delay in seconds between requests (adjust as needed)
+
+def fetch_cre(cre_id: str) -> Dict:
+    """Fetch a single CRE by ID."""
+    time.sleep(RATE_LIMIT_DELAY)  # Rate limit
+    url = f"{BASE_URL}/id/{cre_id}?format=json"
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
+
+def collect_all_cres(root_data: Dict, collected: Dict[str, Dict], visited: Set[str]):
+    """Recursively collect all CREs from the hierarchy."""
+    for cre in root_data:
+        cre_id = cre.get('id')
+        if cre_id in visited:
+            continue
+        visited.add(cre_id)
+        
+        # Fetch full details if not already collected
+        if cre_id not in collected:
+            full_cre = fetch_cre(cre_id)
+            collected[cre_id] = full_cre
+        
+        # Recurse on linked CREs (e.g., 'Contains' or 'Related')
+        links = cre.get('links', [])
+        for link in links:
+            if link.get('ltype') in ['Contains', 'Related']:  # Adjust types as needed
+                linked_cre = link.get('document', {})
+                linked_id = linked_cre.get('id')
+                if linked_id and linked_id not in visited:
+                    # Fetch and recurse
+                    linked_full = fetch_cre(linked_id)
+                    collect_all_cres([linked_full], collected, visited)
+
+def main():
+    # Fetch root CREs
+    root_url = f"{BASE_URL}/root_cres?format=json"
+    response = requests.get(root_url)
+    response.raise_for_status()
+    root_data = response.json()
+    
+    # Collect all
+    collected_cres = {}
+    visited_ids = set()
+    collect_all_cres(root_data, collected_cres, visited_ids)
+    
+    # Optionally, fetch all standards for completeness (not always linked in CREs)
+    standards_url = f"{BASE_URL}/standards"
+    time.sleep(RATE_LIMIT_DELAY)  # Rate limit
+    standards_response = requests.get(standards_url)
+    if standards_response.status_code == 200:
+        standards = standards_response.json()
+        collected_cres['standards'] = {}
+        for std in standards:
+            time.sleep(RATE_LIMIT_DELAY)  # Rate limit per standard fetch
+            std_url = f"{BASE_URL}/standard/{std}?format=json"
+            std_resp = requests.get(std_url)
+            if std_resp.status_code == 200:
+                collected_cres['standards'][std] = std_resp.json()
+    
+    # Save to JSON file
+    with open('opencre_all_data.json', 'w', encoding='utf-8') as f:
+        json.dump(collected_cres, f, indent=4)
+    
+    print(f"Downloaded {len(collected_cres)} CREs (plus standards) to opencre_all_data.json")
+
+if __name__ == "__main__":
+    main()
