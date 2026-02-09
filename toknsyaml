@@ -1,43 +1,11 @@
-# =========================
-# JIRA (username + password)
-# =========================
-jira:
-  url: https://jira.company.com
-  username: svc_appsec
-  password: "JiraPassword@123"
+import yaml
+from pathlib import Path
 
+CONFIG_PATH = Path("C:/mcp/tokens.yaml")
 
-# =========================
-# BITBUCKET (username + app password or token)
-# =========================
-bitbucket:
-  url: https://bitbucket.company.com
-  username: svc_appsec
-  token: "BitbucketAppPasswordOrToken"
+def load_config():
+    if not CONFIG_PATH.exists():
+        raise FileNotFoundError("tokens.yaml not found")
 
-
-# =========================
-# JENKINS (username + API token)
-# =========================
-jenkins:
-  url: https://jenkins.company.com
-  username: svc_appsec
-  token: "JenkinsApiToken"
-
-
-# =========================
-# SONARQUBE (token-based auth)
-# =========================
-sonar:
-  url: https://sonar.company.com
-  token: "SonarQubeToken"
-
-
-# =========================
-# CONTRAST SECURITY
-# (orgId + Authorization header)
-# =========================
-contrast:
-  base_url: https://app.contrastsecurity.com
-  org_id: 12345678-aaaa-bbbb-cccc-1234567890ab
-  authorization: "Contrast API-Key=XXXX, Service-Key=YYYY, User-Authorization=ZZZZ"
+    with open(CONFIG_PATH, "r") as f:
+        return yaml.safe_load(f)
