@@ -1,0 +1,21 @@
+jira:
+  url: https://jira.company.com
+  user: you@company.com
+  token: xxxx
+
+jenkins:
+  url: https://jenkins.company.com
+  token: xxxx
+
+bitbucket:
+  url: https://bitbucket.company.com
+  token: xxxx
+
+sonar:
+  url: https://sonar.company.com
+  token: xxxx
+
+contrast:
+  url: https://app.contrastsecurity.com
+  api_key: xxxx
+  auth_token: xxxx
