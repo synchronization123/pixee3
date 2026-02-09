@@ -3,14 +3,14 @@ from config import load_config
 import requests
 from requests.auth import HTTPBasicAuth
 
-# Initialize MCP server
+# Create MCP server
 mcp = FastMCP("devsecops-mcp")
 
-# Load YAML config once
+# Load config
 config = load_config()
 jira_cfg = config["jira"]
 
-@mcp.callable()
+@mcp.tool()
 def jira_issue(issue_key: str) -> dict:
     """
     Fetch Jira issue details using username + API token
