@@ -1,15 +1,15 @@
-from requests.auth import HTTPBasicAuth
-import requests
+from mcp.server import Server
+from config import load_config
+import jira, jenkins, sonar, bitbucket, contrast
 
-def get_issue(cfg, issue_key):
-    jira = cfg["jira"]
+server = Server("devsecops-mcp")
+config = load_config()
 
-    url = f"{jira['url']}/rest/api/2/issue/{issue_key}"
+@server.tool()
+def jira_issue(issue_key: str) -> dict:
+    """Fetch Jira issue details"""
+    return jira.get_issue(config, issue_key)
 
-    r = requests.get(
-        url,
-        auth=HTTPBasicAuth(jira["username"], jira["token"]),
-        timeout=15
-    )
-    r.raise_for_status()
-    return r.json()
+# (More tools will be added here next)
+
+server.run()
