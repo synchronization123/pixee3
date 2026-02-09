@@ -1,15 +1,33 @@
-from mcp.server import Server
+from mcp.server.fastmcp import FastMCP
 from config import load_config
-import jira, jenkins, sonar, bitbucket, contrast
+import requests
+from requests.auth import HTTPBasicAuth
 
-server = Server("devsecops-mcp")
+# Initialize MCP server
+mcp = FastMCP("devsecops-mcp")
+
+# Load YAML config once
 config = load_config()
+jira_cfg = config["jira"]
 
-@server.tool()
+@mcp.callable()
 def jira_issue(issue_key: str) -> dict:
-    """Fetch Jira issue details"""
-    return jira.get_issue(config, issue_key)
+    """
+    Fetch Jira issue details using username + API token
+    """
+    url = f"{jira_cfg['url']}/rest/api/2/issue/{issue_key}"
 
-# (More tools will be added here next)
+    response = requests.get(
+        url,
+        auth=HTTPBasicAuth(
+            jira_cfg["username"],
+            jira_cfg["token"]
+        ),
+        timeout=15
+    )
 
-server.run()
+    response.raise_for_status()
+    return response.json()
+
+if __name__ == "__main__":
+    mcp.run()
