@@ -1,11 +1,15 @@
-import yaml
-from pathlib import Path
+from requests.auth import HTTPBasicAuth
+import requests
 
-CONFIG_PATH = Path("C:/mcp/tokens.yaml")
+def get_issue(cfg, issue_key):
+    jira = cfg["jira"]
 
-def load_config():
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError("tokens.yaml not found")
+    url = f"{jira['url']}/rest/api/2/issue/{issue_key}"
 
-    with open(CONFIG_PATH, "r") as f:
-        return yaml.safe_load(f)
+    r = requests.get(
+        url,
+        auth=HTTPBasicAuth(jira["username"], jira["token"]),
+        timeout=15
+    )
+    r.raise_for_status()
+    return r.json()
