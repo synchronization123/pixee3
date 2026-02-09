@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "devsecops-mcp": {
+      "command": "python",
+      "args": ["C:/mcp/server.py"],
+      "transport": "stdio"
+    }
+  }
+}
