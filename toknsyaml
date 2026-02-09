@@ -1,21 +1,43 @@
+# =========================
+# JIRA (username + password)
+# =========================
 jira:
   url: https://jira.company.com
-  user: you@company.com
-  token: xxxx
+  username: svc_appsec
+  password: "JiraPassword@123"
 
-jenkins:
-  url: https://jenkins.company.com
-  token: xxxx
 
+# =========================
+# BITBUCKET (username + app password or token)
+# =========================
 bitbucket:
   url: https://bitbucket.company.com
-  token: xxxx
+  username: svc_appsec
+  token: "BitbucketAppPasswordOrToken"
 
+
+# =========================
+# JENKINS (username + API token)
+# =========================
+jenkins:
+  url: https://jenkins.company.com
+  username: svc_appsec
+  token: "JenkinsApiToken"
+
+
+# =========================
+# SONARQUBE (token-based auth)
+# =========================
 sonar:
   url: https://sonar.company.com
-  token: xxxx
+  token: "SonarQubeToken"
 
+
+# =========================
+# CONTRAST SECURITY
+# (orgId + Authorization header)
+# =========================
 contrast:
-  url: https://app.contrastsecurity.com
-  api_key: xxxx
-  auth_token: xxxx
+  base_url: https://app.contrastsecurity.com
+  org_id: 12345678-aaaa-bbbb-cccc-1234567890ab
+  authorization: "Contrast API-Key=XXXX, Service-Key=YYYY, User-Authorization=ZZZZ"
