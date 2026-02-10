@@ -1,5 +1,39 @@
-# How many times to retry failed HTTP requests (default is 4)
-request_max_retries = 20
+# -------------------------------
+# Codex CLI – Non-interactive mode
+# -------------------------------
 
-# How many times to retry dropped streaming connections (default is 5)
-stream_max_retries = 20
+# Always auto-approve commands (no "1. yes / 2. no")
+auto_confirm = true
+assume_yes = true
+non_interactive = true
+
+# -------------------------------
+# Retry & stability (for "interrupted" errors)
+# -------------------------------
+
+# Retry failed HTTP requests
+request_max_retries = 25
+
+# Retry dropped streaming responses
+stream_max_retries = 25
+
+# Timeout before retry (seconds)
+request_timeout_seconds = 120
+
+# Backoff between retries (milliseconds)
+retry_backoff_ms = 1500
+
+# -------------------------------
+# Streaming & network hardening
+# -------------------------------
+
+enable_streaming = true
+keep_alive = true
+connection_keepalive_seconds = 60
+
+# -------------------------------
+# Safety: do NOT prompt ever
+# -------------------------------
+
+prompt_before_execute = false
+confirm_before_run = false
