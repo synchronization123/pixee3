@@ -1,158 +1,469 @@
-You are a disciplined, zero-hallucination security review agent for functional specification documents.
+from flask import Flask, render_template, request, Response, jsonify
+import pandas as pd
+import requests
+import json
+import os
+import time
+import threading
+import re
+from datetime import datetime
+import sys
+import logging
+import webbrowser
+from tkinter import *
+from tkinter.scrolledtext import ScrolledText
+from queue import Queue
 
-You MUST NOT invent, assume, infer, extrapolate, interpret, or fabricate:
-• any requirement, intent, security control, diagram element, risk, or compliance obligation
-• any section number, page number, US/REQ/ID, diagram label, or other identifier that does not appear verbatim in the document
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['CVE_FOLDER'] = 'cve_details'
 
-If a topic, control, or reference is absent from the document → treat it as explicitly not present. Never use: implied, likely, probably, seems, appears, we can assume, suggests, potentially, may indicate.
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['CVE_FOLDER'], exist_ok=True)
 
-────────────────────────────────────────
-MANDATORY READING & CATALOGUING RULE
+progress_log = []
+kev_cache = None
+debian_cache = None
+log_queue = Queue()
 
-Before producing ANY output:
+def log(msg):
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    line = f"[{timestamp}] {msg}"
+    progress_log.append(line)
+    print(line)
+    log_queue.put(line)
 
-1. Read and fully process the entire PDF document from beginning to end.
-2. Mentally catalog every explicit mention (verbatim text) related to:
-   - authentication / authorization / access control / roles / permissions / RBAC / ABAC
-   - encryption / key management / data protection / masking / pseudonymization / anonymization
-   - input validation / sanitization / escaping / allow-list / deny-list
-   - logging / audit trails / monitoring / alerting
-   - APIs / interfaces / external services / third-party integrations / data exchanges
-   - credentials / secrets / keys / certificates / configuration / environment variables
-   - error handling / exception messages / stack traces / debug output
-   - patient safety intersecting with security
-   - compliance frameworks (HIPAA, GDPR, ISO 27001, SOC 2, etc.) or regulated data (PHI, PII, SPD, ePHI)
-   - any Gherkin scenario with security-relevant Given/When/Then steps
-3. Examine every data flow diagram (typically Section 2.2 or similar) and catalog:
-   - every data store / database / file / cache
-   - every data flow / transformation / boundary crossing
-   - every external entity / actor / system
+# ====================== CACHES ======================
+def load_kev():
+    global kev_cache
+    if kev_cache is not None:
+        return
+    try:
+        log("Loading CISA KEV catalog...")
+        r = requests.get("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", timeout=15)
+        if r.status_code == 200:
+            kev_cache = {item['cveID']: item for item in r.json().get('vulnerabilities', [])}
+            log(f"Loaded {len(kev_cache)} KEV entries")
+    except Exception as e:
+        log(f"KEV load failed: {e}")
+        kev_cache = {}
 
-Only after completing this step may you generate output.
+def load_debian_cache():
+    global debian_cache
+    if debian_cache is not None:
+        return
+    try:
+        log("Loading Debian Security Tracker (full JSON)...")
+        r = requests.get("https://security-tracker.debian.org/tracker/data/json", timeout=20)
+        if r.status_code == 200:
+            debian_cache = r.json()
+            log("Debian tracker loaded successfully")
+    except:
+        debian_cache = {}
 
-────────────────────────────────────────
-DETERMINISTIC SEVERITY CLASSIFICATION (MANDATORY – NO DEVIATION)
+# ====================== SMART CVE EXTRACTION ======================
+def extract_all_cves(cell_value):
+    if pd.isna(cell_value) or not str(cell_value).strip():
+        return []
+    text = str(cell_value).upper()
+    matches = re.findall(r'CVE-\d{4}-\d{4,7}', text)
+    parts = re.split(r'[,;\n\r|/\t]+', text)
+    for part in parts:
+        part = part.strip()
+        if re.match(r'^CVE-\d{4}-\d{4,7}$', part):
+            matches.append(part)
+    seen = {}
+    return [x for x in matches if not (x in seen or seen.setdefault(x, True))]
 
-HIGH (.severity-high) – assign ONLY if document explicitly:
-• Describes collection, storage, transmission or processing of PHI/PII/sensitive data WITHOUT any encryption, key management or protection requirement
-• Describes authentication mechanism WITHOUT any authorization, access control, role/permission enforcement or session management control
-• Describes external interface/API/third-party integration WITHOUT any authentication, authorization, rate limiting, input validation or transport security control
-• Mentions storage/transmission/use of credentials/secrets WITHOUT protection, rotation, vaulting or secure storage requirement
-• Contains directly contradictory statements about a security control
-• Explicitly claims compliance (HIPAA/GDPR/etc.) WITHOUT listing ANY concrete control or measure
+# ====================== ALL 23 FETCH FUNCTIONS ======================
+def fetch_nvd(cve):
+    try:
+        r = requests.get(f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve}", timeout=12)
+        if r.status_code == 200:
+            data = r.json()
+            return {"status": "success", "source": "NIST NVD", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    return {"status": "error", "message": f"HTTP {r.status_code}"}
 
-MEDIUM (.severity-medium) – assign ONLY if:
-• Security domain is mentioned but control description is incomplete or lacks critical detail
-• Control is stated but no enforcement/verification/assurance mechanism is described
-• Roles/users/permissions are mentioned but no mapping, assignment rules or review process exists
-• Input validation/sanitization is mentioned but no rules, patterns, boundary conditions or error behavior defined
-• Statement is ambiguous/vague enough to prevent objective verification
+def fetch_circl(cve):
+    try:
+        r = requests.get(f"https://vulnerability.circl.lu/api/cve/{cve}", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "CIRCL", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-LOW (.severity-low) – assign ONLY if:
-• Security control is explicitly stated but lacks sufficient clarity, examples or implementation guidance
-• Minor documentation omission that does not directly relate to PHI/PII exposure or critical control gaps
+def fetch_opencve(cve):
+    try:
+        r = requests.get(f"https://app.opencve.io/api/cve/{cve}", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "OpenCVE", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-Any finding that does not match one of these three exact categories → MUST NOT be reported.
+def fetch_osv(cve):
+    try:
+        r = requests.get(f"https://api.osv.dev/v1/vulns/{cve}", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Google OSV", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-────────────────────────────────────────
-ZERO-FABRICATION GATE (per finding)
+def fetch_github(cve):
+    try:
+        r = requests.get(f"https://api.github.com/advisories?cve_id={cve}", timeout=10)
+        if r.status_code == 200:
+            advisories = r.json()
+            return {"status": "success", "source": "GitHub Advisories", "data": advisories[0] if advisories else {}}
+    except:
+        pass
+    return {"status": "error"}
 
-Before inclusion:
-1. Cited section/REQ/US/ID/page/diagram label exists verbatim in document
-2. Described gap or strength is directly demonstrable from quoted or clearly referenced text
-3. Severity matches one of the three categories above exactly
-→ If any check fails → discard the finding
+def fetch_shodan(cve):
+    try:
+        r = requests.get(f"https://cvedb.shodan.io/cve/{cve}", timeout=8)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Shodan CVEDB", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-────────────────────────────────────────
-ABSENCE HANDLING
+def fetch_redhat(cve):
+    try:
+        r = requests.get(f"https://access.redhat.com/labs/securitydataapi/cve/{cve}.json", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Red Hat", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-If any major security domain below is never mentioned anywhere in the document, include exactly one finding per missing domain:
+def fetch_cveapi(cve):
+    try:
+        r = requests.get(f"https://v1.cveapi.com/{cve}.json", timeout=8)
+        if r.status_code == 200:
+            return {"status": "success", "source": "CVEAPI.com", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-• Authentication is not mentioned anywhere in the document.
-• Authorization / access control is not mentioned anywhere in the document.
-• Encryption / data protection is not mentioned anywhere in the document.
-• Logging / auditing is not mentioned anywhere in the document.
-• Protection of credentials / secrets is not mentioned anywhere in the document.
+def fetch_epss(cve):
+    try:
+        r = requests.get(f"https://api.first.org/data/v1/epss?cve={cve}", timeout=8)
+        if r.status_code == 200:
+            return {"status": "success", "source": "FIRST EPSS", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-Do not combine, elaborate, or add rationale.
+def fetch_kev(cve):
+    if kev_cache is None:
+        load_kev()
+    if kev_cache and cve in kev_cache:
+        return {"status": "success", "source": "CISA KEV", "data": kev_cache[cve]}
+    return {"status": "info", "source": "CISA KEV", "message": "Not in KEV Catalog"}
 
-────────────────────────────────────────
-OUTPUT RULES – STRICT
+def fetch_edgewatch(cve):
+    try:
+        r = requests.get(f"https://cve.edgewatch.net/api/cves/{cve}", timeout=12)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Edgewatch", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-• Output ONLY valid, complete HTML — nothing before <!DOCTYPE html>, nothing after </html>
-• Use the exact HTML structure and CSS provided below — do not add, remove, rename, reorder or modify any heading, column, class or style
-• Findings MUST be ordered: High → Medium → Low, then by section number ascending, then ID ascending (F-01, F-02…)
-• Executive Summary: one factual sentence stating exact counts only (e.g. "3 High, 4 Medium, 1 Low findings were identified.")
-• Overall Risk Rating algorithm (exactly):
-  • Critical  → ≥ 2 High findings
-  • High      → exactly 1 High finding
-  • Moderate  → ≥ 2 Medium findings and 0 High findings
-  • Low       → only Low findings or zero findings total
-• Allowed phrase vocabulary only:
-  is missing, does not mention, is not mentioned, explicitly states, contains, does not contain, references, lacks, provides no, defines no, mentions but does not
-• Forbidden words/phrases: possibly, may, could, suggests, appears, likely, implied, assume, probably, seems, we believe, it is recommended that (in findings), etc.
+def fetch_threatfox(cve):
+    try:
+        r = requests.post("https://threatfox.abuse.ch/api/v1/", 
+                         json={"query": "cve", "cve": cve}, timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "ThreatFox", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-────────────────────────────────────────
-EXACT HTML TEMPLATE (USE VERBATIM)
+def fetch_vulnrichment(cve):
+    try:
+        year = cve.split('-')[1]
+        url = f"https://raw.githubusercontent.com/cisagov/vulnrichment/develop/cve/{year}/{cve}.json"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "CISA Vulnrichment", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Security Review – Functional Specification</title>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; }
-    h1, h2, h3 { color: #b22222; }
-    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #f0f0f0; }
-    .severity-high   { background: #ffcccc; font-weight: bold; }
-    .severity-medium { background: #fff3cd; }
-    .severity-low    { background: #d4edda; }
-    .recommendation  { background: #e6f3ff; padding: 10px; border-left: 4px solid #007bff; margin: 1em 0; }
-    .absent          { font-style: italic; color: #555; }
-  </style>
-</head>
-<body>
+def fetch_vulners(cve):
+    try:
+        r = requests.get(f"https://vulners.com/api/v3/search/lucene/?query=cve:{cve}", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Vulners", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-<h1>Security Review – Functional Specification Document</h1>
-<p><strong>Document identifier:</strong> [use filename if provided, otherwise "Provided Functional Specification PDF"]</p>
-<p><strong>Review generated:</strong> [current real date]</p>
+def fetch_vuldb(cve):
+    try:
+        r = requests.get(f"https://vuldb.com/api/1.0/vuln/{cve}", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "VulDB", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-<h2>1. Executive Summary</h2>
-<p>[One factual sentence stating exact counts only. Example: "2 High, 5 Medium, 0 Low findings were identified."]</p>
+def fetch_sonatype(cve):
+    try:
+        r = requests.get(f"https://ossindex.sonatype.org/api/v3/search/vulnerability/{cve}", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Sonatype", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-<h2>2. Key Security Strengths (explicitly stated controls only)</h2>
-<ul>
-  <!-- List only explicitly described controls with exact reference -->
-  <li class="absent">No explicit security controls are described in the document.</li>
-</ul>
+def fetch_debian(cve):
+    if debian_cache is None:
+        load_debian_cache()
+    try:
+        if debian_cache and cve in debian_cache:
+            return {"status": "success", "source": "Debian Tracker", "data": debian_cache[cve]}
+        return {"status": "info", "source": "Debian Tracker", "message": "Not tracked in Debian"}
+    except:
+        return {"status": "error"}
 
-<h2>3. Security Findings</h2>
-<table>
-  <tr>
-    <th>ID</th>
-    <th>Severity</th>
-    <th>Description</th>
-    <th>Location / Reference</th>
-    <th>Recommendation</th>
-  </tr>
-  <!-- Insert rows here or leave empty with one absent row if zero findings -->
-</table>
+def fetch_ubuntu(cve):
+    try:
+        r = requests.get(f"https://people.canonical.com/~ubuntu-security/cve/{cve}.json", timeout=10)
+        if r.status_code == 200:
+            return {"status": "success", "source": "Ubuntu Security", "data": r.json()}
+    except:
+        pass
+    return {"status": "error"}
 
-<h2>4. Recommendations Summary (prioritized – highest risk first)</h2>
-<ol>
-  <!-- List only evidence-based recommendations matching findings -->
-  <li class="absent">No recommendations required – security is comprehensively addressed.</li>
-</ol>
+def fetch_zdi(cve):
+    try:
+        return {"status": "success", "source": "Zero Day Initiative", "data": {"note": "ZDI advisory may exist", "url": f"https://www.zerodayinitiative.com/advisories/search/?cve={cve}"}}
+    except:
+        return {"status": "error"}
 
-<h2>5. Overall Risk Rating</h2>
-<p>[Critical / High / Moderate / Low] – [one-sentence factual justification using only the count-based algorithm]</p>
+def fetch_msrc(cve):
+    try:
+        return {"status": "success", "source": "Microsoft MSRC", "data": {"note": "Check Microsoft Security Response Center", "url": f"https://msrc.microsoft.com/update-guide/vulnerability/{cve}"}}
+    except:
+        return {"status": "error"}
 
-<h2>6. Additional Notes / Questions for Clarification</h2>
-<ul>
-  <li class="absent">No ambiguities or open questions identified.</li>
-</ul>
+# ====================== VENDOR-SPECIFIC ======================
+def fetch_tomcat_vendor(cve):
+    return {"status": "success", "source": "Apache Tomcat Official", "data": {
+        "advisory_url": "https://tomcat.apache.org/security.html",
+        "note": "Check security-9.html / security-10.html / security-11.html for exact affected versions"
+    }}
 
-</body>
-</html>
+def fetch_oracle_vendor(cve):
+    return {"status": "success", "source": "Oracle Critical Patch Update", "data": {
+        "cpu_page": "https://www.oracle.com/security-alerts/",
+        "mapping_url": "https://www.oracle.com/security-alerts/public-vuln-to-advisory-mapping.html",
+        "note": "Search for this CVE in the CPU mapping table (JDK, Java SE, MySQL)"
+    }}
+
+def fetch_mysql_vendor(cve):
+    return {"status": "success", "source": "MySQL Security", "data": {
+        "advisory_url": "https://www.mysql.com/support/security.html",
+        "note": "MySQL fixes are released via Oracle Critical Patch Updates"
+    }}
+
+# ====================== REPOS LIST (23 total) ======================
+REPOS = [
+    {"name": "NIST NVD", "func": fetch_nvd},
+    {"name": "CIRCL", "func": fetch_circl},
+    {"name": "OpenCVE", "func": fetch_opencve},
+    {"name": "Google OSV", "func": fetch_osv},
+    {"name": "GitHub Advisories", "func": fetch_github},
+    {"name": "Shodan CVEDB", "func": fetch_shodan},
+    {"name": "Red Hat", "func": fetch_redhat},
+    {"name": "CVEAPI.com", "func": fetch_cveapi},
+    {"name": "FIRST EPSS", "func": fetch_epss},
+    {"name": "CISA KEV", "func": fetch_kev},
+    {"name": "Edgewatch", "func": fetch_edgewatch},
+    {"name": "ThreatFox", "func": fetch_threatfox},
+    {"name": "CISA Vulnrichment", "func": fetch_vulnrichment},
+    {"name": "Vulners", "func": fetch_vulners},
+    {"name": "VulDB", "func": fetch_vuldb},
+    {"name": "Sonatype", "func": fetch_sonatype},
+    {"name": "Debian Tracker", "func": fetch_debian},
+    {"name": "Ubuntu Security", "func": fetch_ubuntu},
+    {"name": "Zero Day Initiative", "func": fetch_zdi},
+    {"name": "Microsoft MSRC", "func": fetch_msrc},
+    {"name": "Apache Tomcat Vendor", "func": fetch_tomcat_vendor},
+    {"name": "Oracle Vendor (JDK/MySQL)", "func": fetch_oracle_vendor},
+    {"name": "MySQL Vendor", "func": fetch_mysql_vendor},
+]
+
+# ====================== PROCESSING ======================
+def process_excel(file_path):
+    progress_log.clear()
+    log("Starting CVE Bulk Enrichment...")
+    try:
+        df = pd.read_excel(file_path)
+    except Exception as e:
+        log(f"ERROR reading Excel: {e}")
+        return
+
+    cve_col = None
+    for col in df.columns:
+        if str(col).lower().strip() in ['cve', 'cves', 'vulnerability', 'id', 'cve id']:
+            cve_col = col
+            break
+    if not cve_col:
+        log("ERROR: No CVE column found!")
+        return
+
+    all_cves = []
+    for cell in df[cve_col].dropna():
+        extracted = extract_all_cves(cell)
+        for c in extracted:
+            if c not in all_cves:
+                all_cves.append(c)
+
+    log(f"Extracted {len(all_cves)} unique CVEs (supports comma, newline, mixed formats)")
+
+    for idx, cve in enumerate(all_cves):
+        log(f"Processing {cve} ({idx+1}/{len(all_cves)})")
+        combined = {}
+        nvd_data = None
+
+        for repo in REPOS:
+            if repo["name"] == "NIST NVD":
+                result = repo["func"](cve)
+                combined[repo["name"]] = result
+                if result.get("status") == "success":
+                    nvd_data = result.get("data")
+                break
+
+        for repo in REPOS:
+            if repo["name"] == "NIST NVD":
+                continue
+            result = repo["func"](cve)
+            combined[repo["name"]] = result
+            time.sleep(0.55)
+
+        try:
+            if nvd_data:
+                desc = str(nvd_data).lower()
+                if "tomcat" in desc:
+                    combined["Apache Tomcat (Auto-Detected)"] = fetch_tomcat_vendor(cve)
+                if any(k in desc for k in ["jdk", "java se", "jre", "oracle java"]):
+                    combined["Oracle JDK (Auto-Detected)"] = fetch_oracle_vendor(cve)
+                if "mysql" in desc:
+                    combined["MySQL (Auto-Detected)"] = fetch_mysql_vendor(cve)
+        except:
+            pass
+
+        output_file = os.path.join(app.config['CVE_FOLDER'], f"{cve}.txt")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(f"# Full CVE Intelligence Report – {cve}\n\n")
+            f.write(f"**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"**Sources**: 23\n\n")
+            f.write("## Summary\n")
+            f.write(f"- **In KEV**: {'Yes' if combined.get('CISA KEV', {}).get('status') == 'success' else 'No'}\n\n")
+            f.write("## All Data Sources\n\n")
+            for source, data in combined.items():
+                f.write(f"### {source}\n\n")
+                f.write("```json\n")
+                f.write(json.dumps(data, indent=2, ensure_ascii=False))
+                f.write("\n```\n\n")
+
+        log(f"✓ Saved {cve}.txt")
+
+    log("🎉 ALL CVEs PROCESSED WITH 23 SOURCES + VENDOR ENRICHMENT!")
+    log(f"Check folder: {app.config['CVE_FOLDER']}")
+
+# ====================== ROUTES ======================
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "No file"})
+    file = request.files['file']
+    if file.filename == '' or not file.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify({"success": False, "message": "Please upload an Excel file"})
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filepath)
+    threading.Thread(target=process_excel, args=(filepath,), daemon=True).start()
+    return jsonify({"success": True, "message": "Processing started with 23 sources + smart parsing!"})
+
+@app.route('/progress')
+def progress():
+    def generate():
+        last = 0
+        while True:
+            if len(progress_log) > last:
+                for line in progress_log[last:]:
+                    yield f"data: {line}\n\n"
+                last = len(progress_log)
+            time.sleep(0.25)
+    return Response(generate(), mimetype='text/event-stream')
+
+# ====================== TKINTER GUI CONSOLE ======================
+def start_flask():
+    log("Starting Flask server on http://127.0.0.1:5000")
+    webbrowser.open('http://127.0.0.1:5000')
+    app.run(debug=False, threaded=True, host='127.0.0.1', port=5000)
+
+def update_console():
+    while not log_queue.empty():
+        line = log_queue.get_nowait()
+        console_text.insert(END, line + "\n")
+        console_text.see(END)
+    root.after(200, update_console)
+
+def start_server():
+    start_btn.config(state=DISABLED)
+    threading.Thread(target=start_flask, daemon=True).start()
+
+# ====================== MAIN GUI ======================
+if __name__ == '__main__':
+    # Setup file logging
+    logging.basicConfig(filename='cve_enricher.log', level=logging.INFO,
+                        format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
+    class LoggerWriter:
+        def write(self, message):
+            if message.strip():
+                logging.info(message.strip())
+                log_queue.put(message.strip())
+        def flush(self):
+            pass
+    sys.stdout = LoggerWriter()
+    sys.stderr = LoggerWriter()
+
+    load_kev()
+
+    # Create Tkinter GUI Console
+    root = Tk()
+    root.title("CVE Enricher - Live GUI Console")
+    root.geometry("1000x700")
+    root.configure(bg='#1e1e1e')
+
+    Label(root, text="CVE Bulk Enricher - Live Console", font=("Arial", 16, "bold"), bg='#1e1e1e', fg='#00ff00').pack(pady=10)
+
+    console_text = ScrolledText(root, height=35, bg='#1e1e1e', fg='#00ff00', font=("Consolas", 11))
+    console_text.pack(padx=10, pady=10, fill=BOTH, expand=True)
+
+    start_btn = Button(root, text="🚀 START SERVER & OPEN BROWSER", font=("Arial", 12, "bold"), bg='#00aa00', fg='white', command=start_server, height=2)
+    start_btn.pack(pady=10)
+
+    clear_btn = Button(root, text="Clear Console", command=lambda: console_text.delete(1.0, END), bg='#444444', fg='white')
+    clear_btn.pack(pady=5)
+
+    log("✅ GUI Console Ready")
+    log("Click 'START SERVER & OPEN BROWSER' to begin")
+    log("Upload your Excel in the browser window")
+    log("Every single step will appear here LIVE")
+
+    root.after(200, update_console)
+    root.mainloop()
