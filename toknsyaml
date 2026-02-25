@@ -10,9 +10,7 @@ from datetime import datetime
 import sys
 import logging
 import webbrowser
-from tkinter import *
-from tkinter.scrolledtext import ScrolledText
-from queue import Queue
+from tkinter import messagebox
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -24,14 +22,12 @@ os.makedirs(app.config['CVE_FOLDER'], exist_ok=True)
 progress_log = []
 kev_cache = None
 debian_cache = None
-log_queue = Queue()
 
 def log(msg):
     timestamp = datetime.now().strftime('%H:%M:%S')
     line = f"[{timestamp}] {msg}"
     progress_log.append(line)
     print(line)
-    log_queue.put(line)
 
 # ====================== CACHES ======================
 def load_kev():
@@ -409,33 +405,14 @@ def progress():
             time.sleep(0.25)
     return Response(generate(), mimetype='text/event-stream')
 
-# ====================== TKINTER GUI CONSOLE ======================
-def start_flask():
-    log("Starting Flask server on http://127.0.0.1:5000")
-    webbrowser.open('http://127.0.0.1:5000')
-    app.run(debug=False, threaded=True, host='127.0.0.1', port=5000)
-
-def update_console():
-    while not log_queue.empty():
-        line = log_queue.get_nowait()
-        console_text.insert(END, line + "\n")
-        console_text.see(END)
-    root.after(200, update_console)
-
-def start_server():
-    start_btn.config(state=DISABLED)
-    threading.Thread(target=start_flask, daemon=True).start()
-
-# ====================== MAIN GUI ======================
 if __name__ == '__main__':
-    # Setup file logging
+    # Setup logging to file (for reference)
     logging.basicConfig(filename='cve_enricher.log', level=logging.INFO,
                         format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
     class LoggerWriter:
         def write(self, message):
             if message.strip():
                 logging.info(message.strip())
-                log_queue.put(message.strip())
         def flush(self):
             pass
     sys.stdout = LoggerWriter()
@@ -443,27 +420,31 @@ if __name__ == '__main__':
 
     load_kev()
 
-    # Create Tkinter GUI Console
-    root = Tk()
-    root.title("CVE Enricher - Live GUI Console")
-    root.geometry("1000x700")
-    root.configure(bg='#1e1e1e')
+    # Start Flask server in background thread
+    def run_server():
+        app.run(debug=False, threaded=True, host='127.0.0.1', port=5000)
 
-    Label(root, text="CVE Bulk Enricher - Live Console", font=("Arial", 16, "bold"), bg='#1e1e1e', fg='#00ff00').pack(pady=10)
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
 
-    console_text = ScrolledText(root, height=35, bg='#1e1e1e', fg='#00ff00', font=("Consolas", 11))
-    console_text.pack(padx=10, pady=10, fill=BOTH, expand=True)
+    # Wait a moment for server to start
+    time.sleep(1.5)
 
-    start_btn = Button(root, text="🚀 START SERVER & OPEN BROWSER", font=("Arial", 12, "bold"), bg='#00aa00', fg='white', command=start_server, height=2)
-    start_btn.pack(pady=10)
+    # Automatically open browser
+    webbrowser.open('http://127.0.0.1:5000')
 
-    clear_btn = Button(root, text="Clear Console", command=lambda: console_text.delete(1.0, END), bg='#444444', fg='white')
-    clear_btn.pack(pady=5)
+    # Show clean info popup (you can close it anytime)
+    messagebox.showinfo("CVE Enricher Started Successfully",
+                        "✅ Server is running silently!\n\n"
+                        "Browser opened automatically to:\n"
+                        "http://127.0.0.1:5000\n\n"
+                        "Upload your Excel file now.\n"
+                        "All live progress appears in the web modal.\n\n"
+                        "Close this popup anytime – the tool keeps running.")
 
-    log("✅ GUI Console Ready")
-    log("Click 'START SERVER & OPEN BROWSER' to begin")
-    log("Upload your Excel in the browser window")
-    log("Every single step will appear here LIVE")
-
-    root.after(200, update_console)
-    root.mainloop()
+    # Keep the process alive until you close the terminal or kill it
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Server stopped.")
