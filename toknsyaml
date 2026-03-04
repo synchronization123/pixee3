@@ -1,103 +1,41 @@
-import requests
-import base64
-import pandas as pd
-from typing import List, Dict
+Below to be executed using cron at 2 am everyday in centos.
+How can i set this up so codex cli is triggered and necessary task is performed
 
-# ====================== HARDCODED CONFIGURATION ======================
-# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-API_KEY      = "YOUR_CONTRAST_API_KEY_HERE"          # From Contrast → User Settings → Profile
-USERNAME     = "your.username@company.com"           # Your Contrast login email
-SERVICE_KEY  = "YOUR_SERVICE_KEY_HERE"               # Service Key
-ORG_ID       = "YOUR_ORGANIZATION_UUID_HERE"         # Organization UUID
-APP_ID       = None                                  # ← Set Application UUID or leave None for ALL apps
-OUTPUT_FILE  = "contrast_reported_vulnerabilities.xlsx"  # Output file name
+You are an expert security code reviewer specializing in triaging Contrast IAST findings as true positive or false positive.
 
-BASE_URL     = "https://app.contrastsecurity.com/Contrast/api"   # Change only for on-prem
-LIMIT        = 200
-# =====================================================================
+INSTRUCTIONS - Follow every step exactly in order with ZERO extra text or explanations unless required by the steps:
 
-# WARNING: Hardcoding credentials is for convenience only.
-# Never share or commit this file.
+Step 1: Immediately ask the user ONLY this exact question and nothing else:
+"Enter the full absolute path to the code repository folder:"
 
-def main():
-    # Build auth headers
-    auth_str = base64.b64encode(f"{USERNAME}:{SERVICE_KEY}".encode()).decode()
-    headers = {
-        'API-Key': API_KEY,
-        'Authorization': f'Basic {auth_str}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-    }
+Wait for the user's response and store it as repo_path.
 
-    base_url = BASE_URL.rstrip('/')
-    data: List[Dict] = []
-    offset = 0
+Step 2: Run this exact shell command to download the latest Contrast data:
+python3 ~/Downloads/contrastdata.py
 
-    # ←←← FILTER: ONLY "Reported" status ←←←
-    filter_body = {
-        "status": ["Reported"]
-    }
+Step 3: Load the Excel file ~/Downloads/contrastdata.xlsx (it will contain columns including trace id, title, Rule, filename, line number).
 
-    print("🚀 Starting download from Contrast Security...")
-    print("   → Filtering ONLY vulnerabilities with status: **Reported**")
+If the columns "Analysis" and "Description" do not exist, add them as the last two columns.
 
-    while True:
-        params = {
-            'expand': 'events',      # Required for filename + line number
-            'limit': LIMIT,
-            'offset': offset,
-        }
+Step 4: For each row in the Excel:
 
-        if APP_ID:
-            url = f"{base_url}/ng/{ORG_ID}/traces/{APP_ID}/filter"
-        else:
-            url = f"{base_url}/ng/{ORG_ID}/orgtraces/filter"   # organization-wide
+Build the full file path as: repo_path + "/" + filename (use correct OS path separators).
 
-        response = requests.post(url, headers=headers, params=params, json=filter_body)
+If the file exists, read its content and extract the code context around the exact line number (20 lines before and after).
 
-        if response.status_code != 200:
-            print(f"❌ API Error {response.status_code}: {response.text}")
-            return
+Using the title, Rule, and actual code context from the file:
 
-        resp_json = response.json()
-        traces = resp_json.get('traces', [])
+Decide if this is a real security issue.
 
-        print(f"✅ Fetched {len(traces)} Reported traces (offset {offset})")
+Set "Analysis" column to exactly one of: "True Positive" or "False Positive".
 
-        for trace in traces:
-            trace_id = trace.get('uuid', 'N/A')
-            title    = trace.get('title', 'N/A')
-            rule     = trace.get('rule_name', trace.get('rule', 'N/A'))
+In the "Description" column write a clear 3-6 sentence explanation referencing specific code lines/patterns and why it is true/false positive.
 
-            # Extract filename and line number
-            filename = "N/A"
-            line_number = "N/A"
-            for event in trace.get('events', []):
-                f = event.get('file') or event.get('file_name') or event.get('source_file')
-                ln = event.get('line') or event.get('line_number')
-                if f and ln is not None:
-                    filename = f
-                    line_number = ln
-                    break
 
-            data.append({
-                'Trace ID': trace_id,
-                'Title': title,
-                'Rule': rule,
-                'Filename': filename,
-                'Line Number': line_number
-            })
 
-        if len(traces) < LIMIT:
-            break
-        offset += LIMIT
+Step 5: After processing every row, save the updated Excel file back to ~/Downloads/contrastdata.xlsx.
 
-    # Save to Excel
-    df = pd.DataFrame(data)
-    df.to_excel(OUTPUT_FILE, index=False)
+Step 6: Output exactly this message and nothing else:
+"Analysis completed. Updated file saved at ~/Downloads/contrastdata.xlsx"
 
-    print(f"\n🎉 SUCCESS! {len(data)} Reported vulnerabilities exported to → {OUTPUT_FILE}")
-    print("Open the Excel file and you're all set! 📊")
-
-if __name__ == "__main__":
-    main()
+Start now.
