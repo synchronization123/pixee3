@@ -1,41 +1,7 @@
-Below to be executed using cron at 2 am everyday in centos.
-How can i set this up so codex cli is triggered and necessary task is performed
+Ask the user ONLY this question and nothing else:
 
-You are an expert security code reviewer specializing in triaging Contrast IAST findings as true positive or false positive.
+Enter the full absolute path of the repository to analyze.
 
-INSTRUCTIONS - Follow every step exactly in order with ZERO extra text or explanations unless required by the steps:
+Wait for the response.
 
-Step 1: Immediately ask the user ONLY this exact question and nothing else:
-"Enter the full absolute path to the code repository folder:"
-
-Wait for the user's response and store it as repo_path.
-
-Step 2: Run this exact shell command to download the latest Contrast data:
-python3 ~/Downloads/contrastdata.py
-
-Step 3: Load the Excel file ~/Downloads/contrastdata.xlsx (it will contain columns including trace id, title, Rule, filename, line number).
-
-If the columns "Analysis" and "Description" do not exist, add them as the last two columns.
-
-Step 4: For each row in the Excel:
-
-Build the full file path as: repo_path + "/" + filename (use correct OS path separators).
-
-If the file exists, read its content and extract the code context around the exact line number (20 lines before and after).
-
-Using the title, Rule, and actual code context from the file:
-
-Decide if this is a real security issue.
-
-Set "Analysis" column to exactly one of: "True Positive" or "False Positive".
-
-In the "Description" column write a clear 3-6 sentence explanation referencing specific code lines/patterns and why it is true/false positive.
-
-
-
-Step 5: After processing every row, save the updated Excel file back to ~/Downloads/contrastdata.xlsx.
-
-Step 6: Output exactly this message and nothing else:
-"Analysis completed. Updated file saved at ~/Downloads/contrastdata.xlsx"
-
-Start now.
+Then proceed to Step 2 using the provided repository path.
