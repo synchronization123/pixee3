@@ -1,3 +1,30 @@
+CRITICAL EXECUTION RULE
+
+Immediately request user input before performing any reasoning,
+analysis, planning, or tool usage.
+
+Do NOT analyze the workflow.
+Do NOT inspect the environment.
+Do NOT think about the task.
+
+FIRST ACTION ONLY:
+
+Ask exactly:
+
+Enter the full absolute path of the Excel file containing Jira IDs.
+
+STOP.
+
+Wait for the user to provide the path.
+
+Do nothing else until the path is received.
+
+AFTER USER PROVIDES PATH
+
+Store input as:
+
+EXCEL_FILE_PATH
+
 AGENT MODE
 
 You are running in autonomous execution mode.
@@ -10,9 +37,9 @@ Strict behavior rules:
 4. Do NOT communicate with the user except the initial Excel request.
 5. Process Jira tickets sequentially.
 6. Skip rows that already contain a value in the Suggestion column.
-7. Save Excel after processing each Jira to prevent data loss.
-8. If any step fails for a Jira, record the failure in Notes and continue.
-9. Only update the following columns:
+7. Save Excel after processing each Jira.
+8. If any step fails, record the failure in Notes and continue.
+9. Only update columns:
 
 Suggestion
 Reason
@@ -24,114 +51,41 @@ Execution completed.
 
 WORKFLOW
 
-STEP 1 — INPUT
-
-Ask exactly:
-
-Enter the full absolute path of the Excel file containing Jira IDs.
-
-Wait for input.
-
-Store as:
-
-EXCEL_FILE_PATH
-
-STEP 2 — LOAD EXCEL
-
-Load file using pandas:
+STEP — LOAD EXCEL
 
 df = pandas.read_excel(EXCEL_FILE_PATH)
 
-Verify required columns exist:
+Verify columns:
 
 Jira
 Suggestion
 Reason
 Notes
 
-If missing → stop execution.
+STEP — ITERATION
 
-STEP 3 — ITERATION SETUP
-
-TOTAL_ROWS = len(df)
-
-STEP 4 — PROCESS ROWS
-
-FOR row_index from 0 to TOTAL_ROWS - 1
+FOR each row in df
 
 CURRENT_JIRA = df["Jira"][row_index]
 
-STEP 5 — SKIP PROCESSED ROWS
-
-IF df["Suggestion"][row_index] is not empty
-
-CONTINUE to next row
-
-STEP 6 — FETCH JIRA DETAILS
-
-TRY
+STEP — FETCH DATA
 
 JIRA_DATA = titanium-ai.get_jira_issue(CURRENT_JIRA)
 
-CATCH error
-
-df.loc[row_index, "Suggestion"] = "Needs Further Security Review"
-df.loc[row_index, "Reason"] = "Jira retrieval failed."
-df.loc[row_index, "Notes"] = "Unable to retrieve Jira details."
-
-Save Excel
-CONTINUE
-
-STEP 7 — FETCH PULL REQUEST
-
-TRY
-
 PR_DATA = titanium-ai.get_bitbucket_pr(CURRENT_JIRA)
-
-CATCH error
-
-df.loc[row_index, "Suggestion"] = "Needs Further Security Review"
-df.loc[row_index, "Reason"] = "Pull request retrieval failed."
-df.loc[row_index, "Notes"] = "Unable to retrieve PR details."
-
-Save Excel
-CONTINUE
-
-STEP 8 — FETCH CODE CHANGES
-
-TRY
 
 PR_CHANGES = titanium-ai.get_bitbucket_pr_changes(PR_DATA)
 
-CATCH error
-
-df.loc[row_index, "Suggestion"] = "Needs Further Security Review"
-df.loc[row_index, "Reason"] = "Unable to retrieve PR code changes."
-df.loc[row_index, "Notes"] = "PR change data unavailable."
-
-Save Excel
-CONTINUE
-
-STEP 9 — DIFF UNDERSTANDING
-
-Understand the purpose of the code change.
+STEP — DIFF UNDERSTANDING
 
 Determine:
 
 FILES_MODIFIED
-TYPE_OF_CHANGE (feature / bug fix / refactor / configuration / dependency change)
+TYPE_OF_CHANGE
+FUNCTIONS_MODIFIED
+CLASSES_MODIFIED
 
-Identify:
-
-modified functions
-modified classes
-added logic
-removed logic
-configuration changes
-
-STEP 10 — FUNCTIONAL CODE REVIEW
-
-Analyze the code changes for functional correctness.
+STEP — FUNCTIONAL REVIEW
 
 Check for:
 
@@ -139,36 +93,30 @@ logic errors
 incorrect conditions
 null handling issues
 exception handling problems
-incorrect API usage
+API misuse
 data flow issues
-database query problems
-resource leaks
-unexpected side effects
+database query issues
 
-STEP 11 — SECURITY ANALYSIS
+STEP — SECURITY REVIEW
 
-Analyze PR_CHANGES for modifications involving:
+Analyze changes involving:
 
-authentication logic
-authorization checks
-access control validation
-API endpoint changes
-user input handling
-database queries
-file uploads
-token or session handling
-encryption or cryptographic usage
+authentication
+authorization
+access control
+input validation
+token/session handling
+cryptography
 configuration changes
 dependency changes
 
-STEP 12 — VULNERABILITY DETECTION
+STEP — VULNERABILITY DETECTION
 
-Check for potential vulnerabilities including:
+Detect:
 
 Broken Access Control
 Authentication Bypass
 Injection
-Insecure Input Validation
 Sensitive Data Exposure
 Hardcoded Secrets
 Insecure Configuration
@@ -176,33 +124,26 @@ Privilege Escalation
 Weak Cryptography
 Insecure File Upload
 
-Store result as:
-
-VULNERABILITY_TYPE
-
-STEP 13 — DECISION
+STEP — DECISION
 
 IF security-sensitive logic modified
 
 Suggestion = "Requires Manual Security Testing"
-
 Reason = "Security-sensitive code components modified."
 
-ELSE IF change limited to UI, documentation, logging, or refactoring
+ELSE IF change limited to UI or refactoring
 
 Suggestion = "No Security Testing Required"
-
 Reason = "Changes do not impact security logic."
 
 ELSE
 
 Suggestion = "Needs Further Security Review"
+Reason = "Security impact unclear."
 
-Reason = "Security impact unclear from automated review."
+STEP — NOTES
 
-STEP 14 — NOTES
-
-IF VULNERABILITY_TYPE detected
+IF vulnerability detected
 
 Notes = "Potential vulnerability detected: " + VULNERABILITY_TYPE
 
@@ -210,22 +151,16 @@ ELSE
 
 Notes = "No obvious vulnerabilities detected."
 
-STEP 15 — UPDATE EXCEL
+STEP — UPDATE EXCEL
 
 df.loc[row_index, "Suggestion"] = Suggestion
 df.loc[row_index, "Reason"] = Reason
 df.loc[row_index, "Notes"] = Notes
 
-STEP 16 — CHECKPOINT SAVE
+STEP — SAVE CHECKPOINT
 
 df.to_excel(EXCEL_FILE_PATH, index=False)
 
-STEP 17 — CONTINUE
-
-Proceed to next Jira row.
-
-STEP 18 — COMPLETE
-
-After all rows processed output only:
+FINAL OUTPUT
 
 Execution completed.
