@@ -21,78 +21,76 @@ EXECUTION RULES
 
 WORKFLOW
 
-PHASE 1 — USER INPUT
+STEP 1 — REQUEST INPUT
 
-STEP 1
-Ask the user:
+Immediately ask the user:
 
 Enter the full absolute path of the Excel file containing Jira IDs.
 
-STEP 2
-Wait for user input.
+Wait for the user to provide the path.
 
-STEP 3
-Store the input path as:
+Store the input as:
 
 EXCEL_FILE_PATH
 
-PHASE 2 — LOAD EXCEL FILE
+STEP 2 — LOAD EXCEL FILE
 
-STEP 4
-Use pandas to load the Excel file:
+Use pandas to read the Excel file.
 
 df = pandas.read_excel(EXCEL_FILE_PATH)
 
-STEP 5
-Verify the Excel contains:
+Verify that the Excel file contains:
 
 Column A: Jira
 Column: Suggestion
 
-STEP 6
-Determine total number of rows:
+If the columns are missing, stop execution.
+
+STEP 3 — PREPARE ITERATION
+
+Determine the number of rows.
 
 TOTAL_ROWS = length(df)
 
-PHASE 3 — PROCESS JIRA TICKETS
+STEP 4 — PROCESS JIRA TICKETS
 
 FOR row_index from 0 to TOTAL_ROWS - 1
 
 CURRENT_JIRA = df["Jira"][row_index]
 
-PHASE 4 — FETCH JIRA DETAILS
+STEP 5 — FETCH JIRA DETAILS
 
 Call MCP function:
 
 titanium-ai.get_jira_issue(CURRENT_JIRA)
 
-Store result as:
+Store the response as:
 
 JIRA_DATA
 
-PHASE 5 — FETCH PULL REQUEST DETAILS
+STEP 6 — FETCH PULL REQUEST DETAILS
 
 Call MCP function:
 
 titanium-ai.get_bitbucket_pr(CURRENT_JIRA)
 
-Store result as:
+Store the response as:
 
 PR_DATA
 
-PHASE 6 — FETCH CODE CHANGES
+STEP 7 — FETCH PULL REQUEST CODE CHANGES
 
 Call MCP function:
 
 titanium-ai.get_bitbucket_pr_changes(PR_DATA)
 
-Store result as:
+Store the response as:
 
 PR_CHANGES
 
-PHASE 7 — SECURITY ANALYSIS
+STEP 8 — PERFORM SECURITY ANALYSIS
 
-Analyze PR_CHANGES for security-sensitive modifications including:
+Analyze PR_CHANGES for modifications involving:
 
 authentication logic
 authorization checks
@@ -105,13 +103,13 @@ token or session handling
 encryption or cryptographic usage
 configuration changes
 
-PHASE 8 — SECURITY DECISION
+STEP 9 — SECURITY DECISION
 
-IF code change modifies authentication, authorization, access control, or input validation
+IF the change modifies authentication, authorization, access control, or input validation
 
 Suggestion = "Requires Manual Security Testing"
 
-ELSE IF change is UI only, documentation only, or minor refactoring
+ELSE IF the change is UI-only, documentation-only, or minor refactoring
 
 Suggestion = "No Security Testing Required"
 
@@ -119,24 +117,24 @@ ELSE
 
 Suggestion = "Needs Further Security Review"
 
-PHASE 9 — UPDATE EXCEL
+STEP 10 — UPDATE EXCEL
 
-Update the dataframe:
+Update the Suggestion column for the current Jira row.
 
 df["Suggestion"][row_index] = Suggestion
 
-PHASE 10 — ITERATE
+STEP 11 — CONTINUE LOOP
 
-Proceed to the next Jira row.
+Proceed to the next Jira row until all rows are processed.
 
-PHASE 11 — SAVE FILE
+STEP 12 — SAVE FILE
 
-After all rows processed:
+Save the updated Excel file.
 
-pandas.to_excel(df, EXCEL_FILE_PATH)
+df.to_excel(EXCEL_FILE_PATH, index=False)
 
 FINAL OUTPUT
 
-Only output:
+After processing all Jira tickets, output only:
 
 Jira secure code review completed and Excel updated successfully.
