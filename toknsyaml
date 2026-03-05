@@ -1,74 +1,62 @@
-CRITICAL EXECUTION RULE
+AGENT EXECUTION MODE
 
-Immediately request user input before performing any reasoning,
-analysis, planning, or tool usage.
-
-Do NOT analyze the workflow.
-Do NOT inspect the environment.
-Do NOT think about the task.
-
-FIRST ACTION ONLY:
+Your first action must be requesting the Excel file path.
 
 Ask exactly:
 
 Enter the full absolute path of the Excel file containing Jira IDs.
 
-STOP.
+Wait for user input before performing any processing.
 
-Wait for the user to provide the path.
+Do not run the workflow until the Excel path is provided.
 
-Do nothing else until the path is received.
+BEHAVIOR RULES
 
-AFTER USER PROVIDES PATH
-
-Store input as:
-
-EXCEL_FILE_PATH
-
-AGENT MODE
-
-You are running in autonomous execution mode.
-
-Strict behavior rules:
-
-1. Do NOT provide explanations.
-2. Do NOT display reasoning.
-3. Do NOT print intermediate output.
-4. Do NOT communicate with the user except the initial Excel request.
-5. Process Jira tickets sequentially.
-6. Skip rows that already contain a value in the Suggestion column.
-7. Save Excel after processing each Jira.
-8. If any step fails, record the failure in Notes and continue.
-9. Only update columns:
+1. Do not display reasoning.
+2. Do not print intermediate analysis.
+3. Do not explain actions.
+4. Do not ask additional questions.
+5. Only request the Excel path once at the beginning.
+6. After receiving the path execute the workflow automatically.
+7. Process Jira rows sequentially.
+8. Skip rows where Suggestion is already populated.
+9. Save the Excel file after each Jira is processed.
+10. Only update columns:
 
 Suggestion
 Reason
 Notes
 
-10. When execution completes output only:
+11. When finished output only:
 
 Execution completed.
 
 WORKFLOW
 
-STEP — LOAD EXCEL
+LOAD EXCEL
 
 df = pandas.read_excel(EXCEL_FILE_PATH)
 
-Verify columns:
+Verify columns exist:
 
 Jira
 Suggestion
 Reason
 Notes
 
-STEP — ITERATION
+ITERATE JIRA ROWS
 
-FOR each row in df
+FOR row_index from 0 to len(df) - 1
 
 CURRENT_JIRA = df["Jira"][row_index]
 
-STEP — FETCH DATA
+SKIP PROCESSED ROWS
+
+IF df["Suggestion"][row_index] is not empty
+
+CONTINUE
+
+FETCH DATA
 
 JIRA_DATA = titanium-ai.get_jira_issue(CURRENT_JIRA)
 
@@ -76,16 +64,16 @@ PR_DATA = titanium-ai.get_bitbucket_pr(CURRENT_JIRA)
 
 PR_CHANGES = titanium-ai.get_bitbucket_pr_changes(PR_DATA)
 
-STEP — DIFF UNDERSTANDING
+DIFF UNDERSTANDING
 
-Determine:
+Identify:
 
-FILES_MODIFIED
-TYPE_OF_CHANGE
-FUNCTIONS_MODIFIED
-CLASSES_MODIFIED
+files modified
+type of change
+functions modified
+classes modified
 
-STEP — FUNCTIONAL REVIEW
+FUNCTIONAL REVIEW
 
 Check for:
 
@@ -95,9 +83,9 @@ null handling issues
 exception handling problems
 API misuse
 data flow issues
-database query issues
+database query problems
 
-STEP — SECURITY REVIEW
+SECURITY REVIEW
 
 Analyze changes involving:
 
@@ -105,14 +93,15 @@ authentication
 authorization
 access control
 input validation
-token/session handling
+session handling
+token processing
 cryptography
 configuration changes
 dependency changes
 
-STEP — VULNERABILITY DETECTION
+VULNERABILITY DETECTION
 
-Detect:
+Detect possible vulnerabilities:
 
 Broken Access Control
 Authentication Bypass
@@ -124,7 +113,7 @@ Privilege Escalation
 Weak Cryptography
 Insecure File Upload
 
-STEP — DECISION
+DECISION
 
 IF security-sensitive logic modified
 
@@ -141,7 +130,7 @@ ELSE
 Suggestion = "Needs Further Security Review"
 Reason = "Security impact unclear."
 
-STEP — NOTES
+NOTES
 
 IF vulnerability detected
 
@@ -151,13 +140,13 @@ ELSE
 
 Notes = "No obvious vulnerabilities detected."
 
-STEP — UPDATE EXCEL
+UPDATE EXCEL
 
 df.loc[row_index, "Suggestion"] = Suggestion
 df.loc[row_index, "Reason"] = Reason
 df.loc[row_index, "Notes"] = Notes
 
-STEP — SAVE CHECKPOINT
+SAVE CHECKPOINT
 
 df.to_excel(EXCEL_FILE_PATH, index=False)
 
