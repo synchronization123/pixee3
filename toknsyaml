@@ -1,56 +1,55 @@
-AGENT EXECUTION MODE
+INPUT GATE
 
-Your first action must be requesting the Excel file path.
+The first and only action is requesting the Excel file path.
 
 Ask exactly:
 
 Enter the full absolute path of the Excel file containing Jira IDs.
 
-Wait for user input before performing any processing.
+Wait for the user response.
 
-Do not run the workflow until the Excel path is provided.
+Do not perform planning, analysis, or tool calls until the path is provided.
 
-BEHAVIOR RULES
+AFTER USER INPUT
 
-1. Do not display reasoning.
-2. Do not print intermediate analysis.
-3. Do not explain actions.
-4. Do not ask additional questions.
-5. Only request the Excel path once at the beginning.
-6. After receiving the path execute the workflow automatically.
-7. Process Jira rows sequentially.
-8. Skip rows where Suggestion is already populated.
-9. Save the Excel file after each Jira is processed.
-10. Only update columns:
+Store the input as:
 
-Suggestion
-Reason
-Notes
+EXCEL_FILE_PATH
 
-11. When finished output only:
+EXECUTION MODE
+
+Run silently.
+
+Do not explain actions.
+Do not print reasoning.
+Do not communicate with the user again.
+
+Only update the Excel file.
+
+When finished output only:
 
 Execution completed.
 
-WORKFLOW
+PROCESS
 
 LOAD EXCEL
 
 df = pandas.read_excel(EXCEL_FILE_PATH)
 
-Verify columns exist:
+VERIFY COLUMNS
+
+Required columns:
 
 Jira
 Suggestion
 Reason
 Notes
 
-ITERATE JIRA ROWS
-
-FOR row_index from 0 to len(df) - 1
+FOR EACH ROW
 
 CURRENT_JIRA = df["Jira"][row_index]
 
-SKIP PROCESSED ROWS
+SKIP IF ALREADY PROCESSED
 
 IF df["Suggestion"][row_index] is not empty
 
@@ -64,66 +63,55 @@ PR_DATA = titanium-ai.get_bitbucket_pr(CURRENT_JIRA)
 
 PR_CHANGES = titanium-ai.get_bitbucket_pr_changes(PR_DATA)
 
-DIFF UNDERSTANDING
+UNDERSTAND DIFF
 
-Identify:
-
-files modified
-type of change
-functions modified
-classes modified
+Identify modified files and change type.
 
 FUNCTIONAL REVIEW
 
 Check for:
 
 logic errors
+null issues
 incorrect conditions
-null handling issues
-exception handling problems
+exception handling issues
 API misuse
-data flow issues
-database query problems
+database query errors
 
 SECURITY REVIEW
 
-Analyze changes involving:
+Check for:
 
-authentication
-authorization
+authentication changes
+authorization logic
 access control
 input validation
-session handling
-token processing
-cryptography
+token/session handling
+cryptography usage
 configuration changes
-dependency changes
 
 VULNERABILITY DETECTION
 
-Detect possible vulnerabilities:
+Possible types:
 
 Broken Access Control
-Authentication Bypass
 Injection
 Sensitive Data Exposure
 Hardcoded Secrets
-Insecure Configuration
 Privilege Escalation
 Weak Cryptography
-Insecure File Upload
 
 DECISION
 
 IF security-sensitive logic modified
 
 Suggestion = "Requires Manual Security Testing"
-Reason = "Security-sensitive code components modified."
+Reason = "Security-sensitive code modified."
 
-ELSE IF change limited to UI or refactoring
+ELSE IF change only UI or refactor
 
 Suggestion = "No Security Testing Required"
-Reason = "Changes do not impact security logic."
+Reason = "No security impact."
 
 ELSE
 
@@ -138,18 +126,14 @@ Notes = "Potential vulnerability detected: " + VULNERABILITY_TYPE
 
 ELSE
 
-Notes = "No obvious vulnerabilities detected."
+Notes = "No vulnerability detected."
 
 UPDATE EXCEL
 
-df.loc[row_index, "Suggestion"] = Suggestion
-df.loc[row_index, "Reason"] = Reason
-df.loc[row_index, "Notes"] = Notes
+df.loc[row_index,"Suggestion"] = Suggestion
+df.loc[row_index,"Reason"] = Reason
+df.loc[row_index,"Notes"] = Notes
 
 SAVE CHECKPOINT
 
 df.to_excel(EXCEL_FILE_PATH, index=False)
-
-FINAL OUTPUT
-
-Execution completed.
