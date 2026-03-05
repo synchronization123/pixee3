@@ -1,93 +1,159 @@
+AGENT MODE RULES
+
+You are running in autonomous agent mode.
+
+Strict behavior rules:
+
+1. Do NOT provide explanations.
+2. Do NOT communicate intermediate reasoning.
+3. Do NOT ask additional questions.
+4. Do NOT print analysis results to the terminal.
+5. Do NOT explain actions.
+6. Only request the Excel file path at the start.
+7. After receiving the file path, execute the workflow automatically.
+8. Only update the Excel file.
+9. When execution finishes, output only:
+
+Execution completed.
+
+WORKFLOW
+
 STEP 1 — INPUT
 
-Ask exactly:
+Immediately ask the user:
 
 Enter the full absolute path of the Excel file containing Jira IDs.
 
 Wait for user input.
 
-Store the input as:
+Store input as:
 
 EXCEL_FILE_PATH
 
 STEP 2 — LOAD EXCEL
 
-Use pandas to read the Excel file.
+Use pandas:
 
 df = pandas.read_excel(EXCEL_FILE_PATH)
 
-Verify the Excel contains columns:
+Verify columns exist:
 
 Jira
 Suggestion
+Reason
+Notes
 
-If columns are missing, stop execution.
+If missing → stop execution.
 
-STEP 3 — ITERATION SETUP
+STEP 3 — ITERATION
 
-TOTAL_ROWS = number of rows in df
-
-STEP 4 — PROCESS JIRA ROWS
+TOTAL_ROWS = len(df)
 
 FOR row_index from 0 to TOTAL_ROWS - 1
 
 CURRENT_JIRA = df["Jira"][row_index]
 
-STEP 5 — FETCH JIRA
+STEP 4 — FETCH JIRA
 
 Call:
 
 titanium-ai.get_jira_issue(CURRENT_JIRA)
 
-Store response as:
+Store as:
 
 JIRA_DATA
 
-STEP 6 — FETCH PULL REQUEST
+STEP 5 — FETCH PULL REQUEST
 
 Call:
 
 titanium-ai.get_bitbucket_pr(CURRENT_JIRA)
 
-Store response as:
+Store as:
 
 PR_DATA
 
-STEP 7 — FETCH CODE CHANGES
+STEP 6 — FETCH CODE CHANGES
 
 Call:
 
 titanium-ai.get_bitbucket_pr_changes(PR_DATA)
 
-Store response as:
+Store as:
 
 PR_CHANGES
 
-STEP 8 — SECURITY ANALYSIS
+STEP 7 — SECURITY REVIEW
 
-Analyze PR_CHANGES.
+Analyze PR_CHANGES for modifications involving:
+
+authentication logic
+authorization checks
+access control
+input validation
+session handling
+token processing
+database queries
+API endpoint changes
+file uploads
+encryption or cryptography
+configuration changes
+dependency changes
+
+STEP 8 — VULNERABILITY DETECTION
+
+Identify potential vulnerabilities including:
+
+Broken Access Control
+Authentication Bypass
+Injection
+Insecure Input Validation
+Sensitive Data Exposure
+Hardcoded Secrets
+Insecure Configuration
+Privilege Escalation
+Weak Cryptography
+Insecure File Upload
+
+Store result as:
+
+VULNERABILITY_TYPE
 
 STEP 9 — DECISION
 
-IF authentication, authorization, access control, input validation, or security logic changed
+IF security-sensitive logic changed
 
 Suggestion = "Requires Manual Security Testing"
 
-ELSE IF change is UI, documentation, or non-security refactor
+Reason = "Security-sensitive code components modified."
+
+ELSE IF only UI, documentation, or non-security refactoring
 
 Suggestion = "No Security Testing Required"
+
+Reason = "Changes do not affect security controls."
 
 ELSE
 
 Suggestion = "Needs Further Security Review"
 
-STEP 10 — UPDATE EXCEL
+Reason = "Security impact unclear from automated analysis."
+
+STEP 10 — NOTES
+
+IF vulnerability detected
+
+Notes = "Potential vulnerability detected: " + VULNERABILITY_TYPE
+
+ELSE
+
+Notes = "No vulnerability detected in reviewed code changes."
+
+STEP 11 — UPDATE EXCEL
 
 df.loc[row_index, "Suggestion"] = Suggestion
-
-STEP 11 — CONTINUE
-
-Repeat for next Jira.
+df.loc[row_index, "Reason"] = Reason
+df.loc[row_index, "Notes"] = Notes
 
 STEP 12 — SAVE FILE
 
