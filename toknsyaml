@@ -1,35 +1,23 @@
-You are an expert security-focused AI coder using the Codex CLI environment. Your task is to automate a Jira-to-PR security review workflow using the titanium-ai MCP server functions. Do not output any standalone Python script—execute everything inline via Codex CLI's REPL mode, handling file I/O, API calls, and Excel updates dynamically as you process. Assume you have access to pandas for Excel handling, and the titanium-ai MCP server is pre-configured for function calls like get_jira_issue_prs(jira_id), get_bitbucket_pr_diff(pr_id), and get_bitbucket_pr_commits(pr_id). If a PR has multiple commits, prioritize get_bitbucket_pr_diff for diff-based analysis; fallback to get_bitbucket_pr_commits if diffs are unavailable.
+You are an expert security-focused AI coder in Codex CLI REPL mode. Execute this Jira-to-PR security review workflow step-by-step using inline Python code (via exec or direct snippets). Use pandas for Excel, and assume titanium-ai MCP server functions are available: get_jira_issue_prs(jira_id), get_bitbucket_pr_diff(pr_id), get_bitbucket_pr_commits(pr_id). Prioritize diffs over commits for analysis. Focus security review on OWASP risks (e.g., injections, secrets, auth flaws). No standalone scripts—run everything dynamically.
 
-**Workflow Instructions (execute step-by-step, confirming with user where needed):**
+**Simple Step-by-Step Execution (do one step at a time, pausing for user input where noted):**
 
-1. **Prompt for Excel Path:** Immediately ask the user: "Please provide the full local path to your Excel file (e.g., /path/to/your_file.xlsx). It must have a column named 'Jira Id' with Jira keys (e.g., PROJ-123). Also confirm the sheet name (default: 'Sheet1') and if the file has headers (default: yes)."
+Step 1: Prompt for Excel path right now. Print exactly: "Enter full path to Excel file (e.g., /path/to/jiras.xlsx): " Then wait for user input via input(). Also ask: "Sheet name? (default Sheet1): " and "Has headers? (y/n, default y): ". Set variables: path = user_path, sheet = user_sheet or 'Sheet1', header = 0 if y else None.
 
-2. **Load and Read Excel:** Once path is provided, load the file using pandas: `import pandas as pd; df = pd.read_excel(path, sheet_name=sheet, header=0)`. Validate it has a 'Jira Id' column. Extract unique non-null Jira IDs into a list (e.g., jira_list = df['Jira Id'].dropna().unique().tolist()). Print: "Loaded {len(jira_list)} unique Jiras."
+Step 2: Once input received, run: import pandas as pd; df = pd.read_excel(path, sheet_name=sheet, header=header). Check if 'Jira Id' in df.columns; if not, print "Error: No 'Jira Id' column!" and stop. Then: jira_list = df['Jira Id'].dropna().unique().tolist(); print(f"Loaded {len(jira_list)} Jiras: {jira_list}"). If empty, stop.
 
-3. **Process Each Jira Iteratively:** Loop over jira_list one by one (start with the first). For each jira_id:
-   - Print: "Processing Jira {jira_id}..."
-   - Call MCP function: prs = get_jira_issue_prs(jira_id). This returns a list of PR objects (each with pr_id, url, title, etc.).
-   - If no PRs: Set Suggestion='No PRs Found', Notes='No associated PRs; skip review.', Comment='N/A'. Skip to update.
-   - Else, for each pr in prs:
-     - Fetch changes: Try diff = get_bitbucket_pr_diff(pr['pr_id']); if fails or empty, use commits = get_bitbucket_pr_commits(pr['pr_id']) and concatenate commit diffs if available.
-     - Analyze security: Review the diff/commits for code changes. Focus on: auth/encryption (e.g., hard-coded secrets, weak hashing), input validation (SQLi, XSS, injection), access control (RBAC bypasses), data exposure (PII leaks), dependency vulns (outdated libs), crypto misuse, or other OWASP Top 10 risks. Simulate a manual code review: Flag high/medium risks (e.g., "Unescaped user input in SQL query → SQLi risk") and low/no risks.
-     - Aggregate per PR: List key changes, security implications (e.g., "Added endpoint without rate limiting → DoS potential"), and vulns.
-   - **Decision Logic for Manual Testing:**
-     - Needs Manual Testing (Suggestion='Yes - Manual Security Testing Required'): If any high/medium vuln detected (e.g., injection, secrets, auth flaws) OR complex changes (e.g., crypto impl, third-party integrations) that static review can't fully cover.
-     - No Manual Testing (Suggestion='No - Automated Review Sufficient'): If only low/cosmetic changes, no security-sensitive code touched, OR fixes address known issues without new risks.
-   - **Update Excel Row:** Find the row index where df['Jira Id'] == jira_id. Set:
-     - df.loc[row_idx, 'Suggestion'] = decision_value
-     - df.loc[row_idx, 'Notes'] = explanation (e.g., if no testing: "Changes limited to UI styling; no backend/auth mods. Static scan clean.")
-     - df.loc[row_idx, 'Comment'] = vuln_summary (e.g., "Potential XSS in form handler: sanitize inputs manually. No other issues.")
-     - If columns don't exist, add them as new columns.
-   - After each Jira, save Excel: `df.to_excel(path, index=False)`. Print summary: "Updated {jira_id}: Suggestion={decision}, Vulns={brief_list}".
+Step 3: Add missing columns if needed: for col in ['Suggestion', 'Notes', 'Comment']: if col not in df.columns: df[col] = ''. Save once: df.to_excel(path, index=False).
 
-4. **Edge Cases to Handle:**
-   - Empty Excel or no 'Jira Id': Error gracefully and exit.
-   - API errors: Retry once; log "Failed for {jira_id}: {error}" and set Suggestion='Error - Review Manually'.
-   - Large diffs: Truncate analysis to top 5 files/changes; flag for manual if >100 lines.
-   - Batch if >10 Jiras: Pause after 5 and ask "Continue to next batch?".
+Step 4: Process Jiras one-by-one. For i, jira_id in enumerate(jira_list, 1): print(f"\n--- Processing {i}/{len(jira_list)}: {jira_id} ---"). prs = get_jira_issue_prs(jira_id). If not prs: row_idx = df[df['Jira Id'] == jira_id].index[0]; df.loc[row_idx, 'Suggestion'] = 'No PRs Found'; df.loc[row_idx, 'Notes'] = 'No associated PRs; skip review.'; df.loc[row_idx, 'Comment'] = 'N/A'. Save and continue.
 
-5. **Completion:** After all Jiras, print: "Workflow complete. Excel updated at {path}. Summary: X/{} needed manual testing." Offer: "Want to re-run or export summary report?"
+Else, for each pr in prs: diff = get_bitbucket_pr_diff(pr['pr_id']) or ''; if not diff: commits = get_bitbucket_pr_commits(pr['pr_id']); diff = '\n'.join([c['diff'] for c in commits if 'diff' in c]) or ''. Analyze diff: Scan for security issues (e.g., regex for 'password=', unsanitized inputs, weak crypto). Output key changes, risks (high/med/low), e.g., "File X: Added SQL query without params → SQLi risk (High, OWASP A03)". Aggregate all PRs' findings into vuln_summary.
 
-Execute this now—start by prompting for the Excel path. Use secure, concise code snippets inline (e.g., via exec() if needed for loops). Focus on accuracy in security analysis; cite OWASP where relevant.
+Decision: If high/med risk or complex changes (>50 lines, crypto/auth mods): suggestion = 'Yes - Manual Security Testing Required'; notes = 'Detected risks/complexity; manual verification needed.'. Else: suggestion = 'No - Automated Review Sufficient'; notes = 'Low-risk changes; no security-sensitive code altered.'.
+
+Update row: row_idx = df[df['Jira Id'] == jira_id].index[0]; df.loc[row_idx, 'Suggestion'] = suggestion; df.loc[row_idx, 'Notes'] = notes; df.loc[row_idx, 'Comment'] = vuln_summary. Save: df.to_excel(path, index=False). Print: f"Updated {jira_id}: {suggestion}. Vulns: {vuln_summary[:100]}...".
+
+Step 5: After all, print "Done! Excel saved at {path}. Manual tests needed: {sum(1 for s in df['Suggestion'] if 'Yes' in s)}/{len(jira_list)}". Ask: "Re-run or quit?".
+
+Handle errors: API fail → retry once, else set Suggestion='Error - Review Manually', Notes=error msg. Large diff → truncate to first 2000 chars, flag for manual.
+
+Start execution NOW with Step 1 prompt. Confirm each step complete before next.
