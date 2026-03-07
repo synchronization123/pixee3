@@ -1,89 +1,156 @@
-You are an expert security-focused AI coder in Codex CLI REPL mode. Execute this simplified Jira-to-PR security review workflow step-by-step using inline Python code snippets (run them one at a time via direct exec or copy-paste). Use pandas for Excel handling. Assume titanium-ai MCP server functions are pre-loaded: get_jira_issue_prs(jira_id) → list of PR dicts (with 'pr_id', 'title', etc.); get_bitbucket_pr_diff(pr_id) → diff string; get_bitbucket_pr_commits(pr_id) → list of commit dicts with 'diff' key if available. Prioritize diff over commits. No admin mode needed—run in user space only. Focus analysis on OWASP Top 10 (injections, broken auth, sensitive data exposure, etc.). Handle errors gracefully without retries or external installs.
+import requests
+import subprocess
 
-**Execute in Order (pause after each major step for confirmation; use print() for output):**
+JIRA_BASE = "https://jira.crm.com"
+BITBUCKET_BASE = "https://bitbucket.crm.com"
 
-**Step 1: Load Excel (run this first, replace with your path/sheet):**  
-```python
-import pandas as pd
-path = '/path/to/your/jiras.xlsx'  # Edit this to your file path
-sheet = 'Sheet1'  # Edit if needed
-header = 0  # 0 for yes, None for no
-df = pd.read_excel(path, sheet_name=sheet, header=header)
-if 'Jira Id' not in df.columns:
-    print("Error: No 'Jira Id' column! Fix and re-run.")
-else:
-    for col in ['Suggestion', 'Notes', 'Comment']:
-        if col not in df.columns:
-            df[col] = ''
-    df.to_excel(path, index=False)
-    jira_list = df['Jira Id'].dropna().unique().tolist()
-    print(f"Loaded {len(jira_list)} unique Jiras: {jira_list}")
-```
-Confirm: "Excel loaded? Y/N" (If N, fix path and re-run Step 1.)
+JIRA_TOKEN = "YOUR_JIRA_TOKEN"
+BITBUCKET_TOKEN = "YOUR_BITBUCKET_TOKEN"
 
-**Step 2: Process Single Jira (copy-paste and edit jira_id; run for each one-by-one):**  
-```python
-jira_id = 'PROJ-123'  # Edit to your first Jira ID from list
-print(f"\n--- Processing {jira_id} ---")
-try:
-    prs = get_jira_issue_prs(jira_id)
-    if not prs:
-        row_idx = df[df['Jira Id'] == jira_id].index[0]
-        df.loc[row_idx, 'Suggestion'] = 'No PRs Found'
-        df.loc[row_idx, 'Notes'] = 'No associated PRs; skip review.'
-        df.loc[row_idx, 'Comment'] = 'N/A'
-        df.to_excel(path, index=False)
-        print("Updated: No PRs.")
-    else:
-        vuln_summary = []
-        all_changes_low_risk = True
+JIRA_HEADERS = {
+    "Authorization": f"Bearer {JIRA_TOKEN}",
+    "Accept": "application/json"
+}
+
+BB_HEADERS = {
+    "Authorization": f"Bearer {BITBUCKET_TOKEN}",
+    "Accept": "application/json"
+}
+
+
+def get_issue_id(jira_key):
+
+    url = f"{JIRA_BASE}/rest/api/2/issue/{jira_key}?fields=id"
+
+    r = requests.get(url, headers=JIRA_HEADERS)
+
+    if r.status_code != 200:
+        print(f"Failed to fetch Jira {jira_key}")
+        return None
+
+    return r.json()["id"]
+
+
+def get_pull_requests(issue_id):
+
+    url = f"{JIRA_BASE}/rest/dev-status/1.0/issue/detail"
+
+    params = {
+        "issueId": issue_id,
+        "applicationType": "stash",
+        "dataType": "pullrequest"
+    }
+
+    r = requests.get(url, headers=JIRA_HEADERS, params=params)
+
+    prs = []
+
+    if r.status_code == 200:
+
+        data = r.json()
+
+        for pr in data["detail"][0]["pullRequests"]:
+
+            if pr["status"] != "DECLINED":
+
+                prs.append({
+                    "id": pr["id"],
+                    "repo": pr["repositorySlug"],
+                    "project": pr["project"]["key"]
+                })
+
+    return prs
+
+
+def get_added_lines(project, repo, pr_id):
+
+    url = f"{BITBUCKET_BASE}/rest/api/projects/{project}/repos/{repo}/pull-requests/{pr_id}.diff"
+
+    r = requests.get(url, headers=BB_HEADERS)
+
+    if r.status_code != 200:
+        return ""
+
+    added_lines = []
+
+    for line in r.text.split("\n"):
+
+        if line.startswith("+") and not line.startswith("+++"):
+            added_lines.append(line[1:])
+
+    return "\n".join(added_lines)
+
+
+def save_code_file(jira, pr_id, code):
+
+    filename = f"{jira}_PR{pr_id}_added_code.txt"
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(code)
+
+    return filename
+
+
+def run_codex_review(file):
+
+    prompt = f"""
+You are a senior Application Security engineer.
+
+Review the code snippets in this file.
+
+Tasks:
+1. Summarize what functionality was added
+2. Identify security vulnerabilities
+3. Highlight risky patterns
+4. Provide severity
+5. Provide remediation
+"""
+
+    cmd = f'codex exec "{prompt}" < {file}'
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+    return result.stdout
+
+
+def main():
+
+    jira_input = input("Enter Jira IDs (comma separated): ")
+
+    jira_list = [j.strip() for j in jira_input.split(",")]
+
+    for jira in jira_list:
+
+        print(f"\nProcessing {jira}")
+
+        issue_id = get_issue_id(jira)
+
+        if not issue_id:
+            continue
+
+        prs = get_pull_requests(issue_id)
+
+        if not prs:
+            print("No active PRs found")
+            continue
+
         for pr in prs:
-            try:
-                diff = get_bitbucket_pr_diff(pr['pr_id'])
-                if not diff:
-                    commits = get_bitbucket_pr_commits(pr['pr_id'])
-                    diff = '\n'.join([c.get('diff', '') for c in commits if c.get('diff')])
-                if len(diff) > 2000: diff = diff[:2000] + '\n[Truncated - flag for manual]'
-                
-                # Security analysis (simple regex/keyword scan + logic)
-                risks = []
-                if any(kw in diff.lower() for kw in ['password=', 'secret=', 'api_key=']): risks.append('Hard-coded secrets (High, OWASP A07)')
-                if 'sql' in diff.lower() and 'parameter' not in diff.lower(): risks.append('Potential SQLi in query (High, OWASP A03)')
-                if 'input' in diff.lower() and 'escape' not in diff.lower() and 'sanitize' not in diff.lower(): risks.append('Unvalidated input (Med, OWASP A07)')
-                if 'crypto' in diff.lower() or 'hash' in diff.lower(): risks.append('Crypto impl - manual check needed (Med, OWASP A02)')
-                if len(risks) > 0 or len(diff) > 1000 or 'auth' in diff.lower():
-                    all_changes_low_risk = False
-                vuln_summary.append(f"PR {pr['pr_id']}: {pr['title'][:50]}... Risks: {', '.join(risks) if risks else 'None (Low)'}. Key changes: {diff[:200]}...")
-            except Exception as e:
-                vuln_summary.append(f"PR {pr['pr_id']}: Error fetching diff - {str(e)}")
-        
-        # Decision
-        if not all_changes_low_risk:
-            suggestion = 'Yes - Manual Security Testing Required'
-            notes = 'High/med risks or complex changes detected; verify manually (OWASP refs above).'
-        else:
-            suggestion = 'No - Automated Review Sufficient'
-            notes = 'Low/cosmetic changes only; no security-sensitive code touched.'
-        
-        row_idx = df[df['Jira Id'] == jira_id].index[0]
-        df.loc[row_idx, 'Suggestion'] = suggestion
-        df.loc[row_idx, 'Notes'] = notes
-        df.loc[row_idx, 'Comment'] = '; '.join(vuln_summary)
-        df.to_excel(path, index=False)
-        print(f"Updated {jira_id}: {suggestion}. Vulns: {df.loc[row_idx, 'Comment'][:150]}...")
-except Exception as e:
-    print(f"Error for {jira_id}: {str(e)}. Set to manual review.")
-    row_idx = df[df['Jira Id'] == jira_id].index[0]
-    df.loc[row_idx, 'Suggestion'] = 'Error - Review Manually'
-    df.loc[row_idx, 'Notes'] = str(e)
-    df.to_excel(path, index=False)
-```
-After running for one Jira: Confirm "Next Jira? Y/N" (Edit jira_id and re-run Step 2 until done.)
 
-**Step 3: Final Summary (run once all Jiras processed):**  
-```python
-manual_count = sum(1 for s in df['Suggestion'] if 'Yes' in s or 'Error' in s)
-print(f"Done! Manual tests needed: {manual_count}/{len(jira_list)}. Check {path}.")
-print(df[['Jira Id', 'Suggestion', 'Notes', 'Comment']].to_string(index=False))
-```
-Paste these into your Codex CLI REPL one snippet at a time. No admin needed—starts immediately after editing path in Step 1. If MCP functions fail, check your titanium-ai setup. Let me know output/errors for tweaks!
+            pr_id = pr["id"]
+
+            code = get_added_lines(pr["project"], pr["repo"], pr_id)
+
+            if not code.strip():
+                print("No added code")
+                continue
+
+            file = save_code_file(jira, pr_id, code)
+
+            review = run_codex_review(file)
+
+            print("\n==== SECURITY REVIEW ====")
+            print(review)
+
+
+if __name__ == "__main__":
+    main()
