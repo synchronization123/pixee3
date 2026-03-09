@@ -1,272 +1,103 @@
-import argparse
-import os
-import subprocess
-import sys
-from typing import List, Dict, Optional, Any
+You are a Senior Application Security Engineer performing a professional secure code review.
 
-import requests
-from requests.exceptions import RequestException
+Your task is to analyze the provided Jira ticket context, source code, and dependent files to identify security vulnerabilities and design flaws.
 
-# Configuration
-JIRA_BASE = "https://jira.crm.com"
-BITBUCKET_BASE = "https://bitbucket.crm.com"
+Follow the process below strictly.
 
-# WARNING: Hardcoding tokens is a SECURITY RISK! They should be stored in environment variables,
-# a secure vault, or prompted securely. Replace the placeholders below with your actual tokens.
-# NEVER commit this to version control.
-JIRA_TOKEN = "YOUR_JIRA_TOKEN_HERE"
-BITBUCKET_TOKEN = "YOUR_BITBUCKET_TOKEN_HERE"
+--------------------------------
+CONTEXT
+--------------------------------
+Jira ID: {JIRA_ID}
 
-if not JIRA_TOKEN or JIRA_TOKEN == "YOUR_JIRA_TOKEN_HERE":
-    raise ValueError("JIRA_TOKEN must be set to a valid value (not the placeholder).")
+Jira Description:
+{JIRA_DESCRIPTION}
 
-if not BITBUCKET_TOKEN or BITBUCKET_TOKEN == "YOUR_BITBUCKET_TOKEN_HERE":
-    raise ValueError("BITBUCKET_TOKEN must be set to a valid value (not the placeholder).")
+Repository:
+{REPO_URL}
 
-JIRA_HEADERS = {
-    "Authorization": f"Bearer {JIRA_TOKEN}",
-    "Accept": "application/json"
-}
+Primary File Under Review:
+{PRIMARY_FILE_PATH}
 
-BB_HEADERS = {
-    "Authorization": f"Bearer {BITBUCKET_TOKEN}",
-    "Accept": "application/json"
-}
+Dependent Files:
+{DEPENDENCY_FILE_PATHS}
 
+Static Analysis Findings (if any):
+{SONAR_OR_SAST_RESULTS}
 
-def log_error(message: str) -> None:
-    """Simple logging for errors."""
-    print(f"ERROR: {message}", file=sys.stderr)
+--------------------------------
+OBJECTIVE
+--------------------------------
 
+Perform a comprehensive Application Security Analysis focusing on:
 
-def log_info(message: str) -> None:
-    """Simple logging for info."""
-    print(message)
+1. OWASP Top 10 vulnerabilities
+2. CWE Top 25 weaknesses
+3. Authentication and authorization flaws
+4. Injection vulnerabilities (SQL, OS, LDAP, NoSQL, XSS)
+5. Sensitive data exposure
+6. Hardcoded secrets or credentials
+7. Insecure cryptographic usage
+8. Unsafe deserialization
+9. Security misconfiguration
+10. Business logic flaws
+11. Dependency vulnerabilities
+12. Privilege escalation paths
+13. Input validation failures
+14. Insecure file handling
+15. API security issues
 
+--------------------------------
+ANALYSIS REQUIREMENTS
+--------------------------------
 
-def get_issue_id(jira_key: str) -> Optional[str]:
-    """
-    Fetch the internal ID for a Jira issue key.
-    """
-    url = f"{JIRA_BASE}/rest/api/2/issue/{jira_key}?fields=id"
-    try:
-        response = requests.get(url, headers=JIRA_HEADERS, timeout=10)
-        response.raise_for_status()
-        return response.json().get("id")
-    except RequestException as e:
-        log_error(f"Failed to fetch Jira issue {jira_key}: {e}")
-        return None
-    except (KeyError, ValueError) as e:
-        log_error(f"Invalid response for Jira issue {jira_key}: {e}")
-        return None
+1. Analyze the code in context of the Jira task.
+2. Consider cross-file flows between the provided files.
+3. Identify vulnerable data flows from:
+   - User input
+   - External APIs
+   - Database queries
+4. Trace the flow of sensitive data.
+5. Identify exploitable attack paths.
+6. Avoid guessing if evidence is not present.
 
+--------------------------------
+FOR EACH SECURITY ISSUE FOUND
+--------------------------------
 
-def get_pull_requests(issue_id: str) -> List[Dict[str, Any]]:
-    """
-    Fetch active pull requests linked to the Jira issue.
-    """
-    url = f"{JIRA_BASE}/rest/dev-status/1.0/issue/detail"
-    params = {
-        "issueId": issue_id,
-        "applicationType": "stash",
-        "dataType": "pullrequest"
-    }
-    try:
-        response = requests.get(url, headers=JIRA_HEADERS, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        prs = []
-        # Safely access the structure; adjust if your API response differs
-        if "detail" in data and len(data["detail"]) > 0 and "pullRequests" in data["detail"][0]:
-            for pr in data["detail"][0]["pullRequests"]:
-                if pr.get("status") != "DECLINED":
-                    prs.append({
-                        "id": pr["id"],
-                        "repo": pr["repositorySlug"],
-                        "project": pr["project"]["key"]
-                    })
-        return prs
-    except RequestException as e:
-        log_error(f"Failed to fetch PRs for issue ID {issue_id}: {e}")
-        return []
-    except (KeyError, ValueError) as e:
-        log_error(f"Invalid response for PRs of issue ID {issue_id}: {e}")
-        return []
+Provide the following details:
 
+- Vulnerability Title
+- Severity (Critical / High / Medium / Low)
+- CWE ID
+- OWASP Category
+- File Name
+- Line Number
+- Vulnerable Code Snippet
+- Root Cause
+- Exploitation Scenario
+- Impact
+- Recommended Fix
+- Secure Code Example (if applicable)
 
-def get_added_lines(project: str, repo: str, pr_id: int) -> str:
-    """
-    Fetch the diff for a PR and extract added lines (+ lines, excluding headers).
-    Note: Bitbucket API endpoint may need adjustment to /rest/api/1.0/.../diff if issues arise.
-    """
-    # Adjusted URL to standard Bitbucket Server API (add /1.0 if needed for your instance)
-    url = f"{BITBUCKET_BASE}/rest/api/latest/projects/{project}/repos/{repo}/pull-requests/{pr_id}/diff"
-    try:
-        response = requests.get(url, headers=BB_HEADERS, timeout=30)
-        response.raise_for_status()
-        added_lines = []
-        for line in response.text.splitlines():
-            if line.startswith("+") and not line.startswith("+++"):
-                added_lines.append(line[1:].rstrip())  # Strip trailing whitespace for cleanliness
-        return "\n".join(added_lines)
-    except RequestException as e:
-        log_error(f"Failed to fetch diff for PR {pr_id} in {project}/{repo}: {e}")
-        return ""
-    except Exception as e:
-        log_error(f"Unexpected error processing diff for PR {pr_id}: {e}")
-        return ""
+--------------------------------
+OUTPUT FORMAT
+--------------------------------
 
+Provide results in the following structure:
 
-def save_code_file(jira_key: str, pr_id: int, code: str) -> str:
-    """
-    Save added code to a temporary file.
-    Uses a temp dir for better hygiene; filename is deterministic for reference.
-    """
-    import tempfile
-    filename = f"{jira_key}_PR{pr_id}_added_code.txt"
-    temp_dir = tempfile.gettempdir()
-    full_path = os.path.join(temp_dir, filename)
-    try:
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(code)
-        return full_path
-    except IOError as e:
-        log_error(f"Failed to save file {filename}: {e}")
-        return ""
+1. Executive Summary
+2. Vulnerability Findings
+3. Risk Rating
+4. Attack Scenarios
+5. Remediation Recommendations
+6. Secure Coding Improvements
 
+--------------------------------
+IMPORTANT RULES
+--------------------------------
 
-def run_code_review(file_path: str) -> str:
-    """
-    Run the codex review using subprocess.
-    Enhanced prompt for better structure. Assumes 'codex' CLI is installed and configured.
-    Falls back to a placeholder if codex fails.
-    """
-    if not os.path.exists(file_path):
-        return "ERROR: Review file not found."
-
-    prompt = f"""
-You are a senior Application Security engineer with expertise in secure coding practices.
-
-Review the following code snippets (these are only the added lines from a pull request).
-
-Provide a structured response in Markdown format:
-
-## Functionality Summary
-- Briefly describe what new functionality or changes were added.
-
-## Security Vulnerabilities
-- List any identified vulnerabilities (e.g., SQL injection, XSS, insecure deserialization).
-- For each: Description, Affected code snippet (quote relevant lines), CVSS-like severity (Low/Medium/High/Critical).
-
-## Risky Patterns
-- Highlight any anti-patterns (e.g., hard-coded secrets, unsafe regex, weak crypto).
-- For each: Description, Affected code snippet, Potential impact.
-
-## Recommendations
-- Provide specific, actionable remediation steps for each issue.
-- Suggest best practices to prevent recurrence.
-
-## Overall Assessment
-- Risk level for merge: Safe / Review Needed / Block Merge.
-- Any non-security notes (e.g., code quality).
-
-Code to review:
-{open(file_path, 'r', encoding='utf-8').read()}
-"""
-
-    cmd = ["codex", "exec", prompt]  # Avoid shell=True for security; use list for args
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60,  # Prevent hangs
-            check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        log_error(f"Codex review failed with code {e.returncode}: {e.stderr}")
-        return f"## Review Failed\nFailed to run codex review. Error: {e.stderr}\n\n## Fallback Advice\nManually review the code in {file_path} for common issues like injection flaws, auth bypass, and secret exposure."
-    except FileNotFoundError:
-        log_error("Codex CLI not found. Install via your package manager or use an alternative (e.g., OpenAI API directly).")
-        return "## Review Skipped\nCodex tool not available. Please review manually."
-    except subprocess.TimeoutExpired:
-        log_error("Codex review timed out.")
-        return "## Review Timed Out\nAnalysis exceeded time limit. Review manually for critical PRs."
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Automated Security Review of Added Code in Bitbucket PRs Linked to Jira Issues"
-    )
-    parser.add_argument(
-        "jira_ids",
-        nargs="+",
-        help="Jira issue keys (e.g., PROJ-123). Multiple space-separated."
-    )
-    parser.add_argument(
-        "--cleanup",
-        action="store_true",
-        help="Delete temp files after review (default: keep for manual inspection)."
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=None,
-        help="Directory to save review files (default: current dir)."
-    )
-    args = parser.parse_args()
-
-    jira_list = args.jira_ids
-    temp_files = []  # Track for cleanup
-
-    for jira_key in jira_list:
-        log_info(f"\n{'='*60}")
-        log_info(f"Processing Jira: {jira_key}")
-        log_info(f"{'='*60}")
-
-        issue_id = get_issue_id(jira_key.strip())
-        if not issue_id:
-            log_info("Skipping due to fetch error.")
-            continue
-
-        prs = get_pull_requests(issue_id)
-        if not prs:
-            log_info("No active PRs found.")
-            continue
-
-        for pr in prs:
-            pr_id = pr["id"]
-            project = pr["project"]
-            repo = pr["repo"]
-
-            log_info(f"  Fetching added code for PR {pr_id} in {project}/{repo}...")
-
-            code = get_added_lines(project, repo, pr_id)
-            if not code.strip():
-                log_info(f"  No added code found for PR {pr_id}.")
-                continue
-
-            file_path = save_code_file(jira_key, pr_id, code)
-            if not file_path:
-                continue
-
-            temp_files.append(file_path)
-            log_info(f"  Saved added code to: {file_path}")
-
-            review = run_code_review(file_path)
-            log_info(f"\n{'-'*40} SECURITY REVIEW FOR PR {pr_id} {'-'*40}")
-            log_info(review)
-            log_info(f"{'-'*80}\n")
-
-    # Cleanup if requested
-    if args.cleanup:
-        for file_path in temp_files:
-            try:
-                os.remove(file_path)
-                log_info(f"Cleaned up: {file_path}")
-            except OSError as e:
-                log_error(f"Failed to cleanup {file_path}: {e}")
-
-
-if __name__ == "__main__":
-    main()
+- Only report issues supported by code evidence.
+- Do not hallucinate vulnerabilities.
+- If no issue exists, clearly state "No confirmed security vulnerabilities detected".
+- Prioritize findings by severity.
+- Be concise but technically accurate.
