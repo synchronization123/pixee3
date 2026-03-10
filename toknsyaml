@@ -1,458 +1,171 @@
 import os
-import re
+import json
 import requests
-import javalang
-import tkinter as tk
-from tkinter import filedialog, ttk, scrolledtext, simpledialog
-from collections import defaultdict, deque
 
-############################################################
-# BITBUCKET CONFIGURATION (PLACEHOLDERS)
-############################################################
+# ==========================
+# CONFIGURATION
+# ==========================
 
-BITBUCKET_BASE_URL = "https://bitbucket.example.com/rest/api/1.0"
-BITBUCKET_PROJECT = "PROJECT_KEY"
-BITBUCKET_REPO = "REPO_SLUG"
+JENKINS_URL = "http://jenkins.company.com"
+JENKINS_JOB = "your-job-name"
 
-BITBUCKET_TOKEN = os.getenv("BITBUCKET_TOKEN", "YOUR_BITBUCKET_TOKEN")
+JENKINS_USER = "jenkins_user"
+JENKINS_TOKEN = "jenkins_api_token"
 
-BITBUCKET_HEADERS = {
-    "Authorization": f"Bearer {BITBUCKET_TOKEN}",
-    "Accept": "application/json"
-}
+BITBUCKET_URL = "https://bitbucket.company.com"
+BITBUCKET_PROJECT = "PROJECTKEY"
+BITBUCKET_REPO = "repo-name"
 
-############################################################
-# SECURITY PATTERNS
-############################################################
+BITBUCKET_USER = "bitbucket_user"
+BITBUCKET_PASS = "bitbucket_password"
 
-SOURCES = [
-    "getParameter",
-    "getHeader",
-    "nextLine"
-]
+LOCAL_REPO_PATH = "./repo"
 
-SINKS = [
-    "executeQuery",
-    "executeUpdate",
-    "prepareStatement",
-    "createStatement"
-]
+STATE_FILE = "jenkins_state.json"
 
-JAVA_EXT = (".java", ".jsp")
+# ==========================
+# SESSION SETUP
+# ==========================
 
-############################################################
-# VIRTUAL REPOSITORY
-############################################################
+jenkins_session = requests.Session()
+jenkins_session.auth = (JENKINS_USER, JENKINS_TOKEN)
 
-class VirtualRepository:
+bitbucket_session = requests.Session()
+bitbucket_session.auth = (BITBUCKET_USER, BITBUCKET_PASS)
 
-    def __init__(self):
-        self.files = {}
+# ==========================
+# STATE MANAGEMENT
+# ==========================
 
-    def load_local_repo(self, path):
-        for root, _, files in os.walk(path):
-            for f in files:
-                if f.endswith(JAVA_EXT):
-                    full = os.path.join(root, f)
-                    try:
-                        with open(full, "r", errors="ignore") as fp:
-                            self.files[full] = fp.read()
-                    except:
-                        pass
+def load_state():
+    if not os.path.exists(STATE_FILE):
+        return {"last_build": 0}
+    with open(STATE_FILE, "r") as f:
+        return json.load(f)
 
-    def add_file(self, path, content):
-        self.files[path] = content
+def save_state(state):
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
 
-############################################################
-# BITBUCKET API HELPERS
-############################################################
+# ==========================
+# GET LATEST BUILD INFO
+# ==========================
 
-def get_pr_changed_files(pr_id):
-    url = f"{BITBUCKET_BASE_URL}/projects/{BITBUCKET_PROJECT}/repos/{BITBUCKET_REPO}/pull-requests/{pr_id}/changes"
-    try:
-        response = requests.get(url, headers=BITBUCKET_HEADERS)
-        data = response.json()
-        files = []
-        for v in data.get("values", []):
-            path = v["path"]["toString"]
-            files.append(path)
-        return files
-    except:
-        return []
+def get_latest_build():
 
-def download_file_from_repo(file_path, branch="master"):
-    url = f"{BITBUCKET_BASE_URL}/projects/{BITBUCKET_PROJECT}/repos/{BITBUCKET_REPO}/raw/{file_path}?at={branch}"
-    try:
-        response = requests.get(url, headers=BITBUCKET_HEADERS)
-        if response.status_code == 200:
-            return response.text
-    except:
-        pass
+    url = f"{JENKINS_URL}/job/{JENKINS_JOB}/lastBuild/api/json"
+
+    r = jenkins_session.get(url)
+    r.raise_for_status()
+
+    return r.json()
+
+# ==========================
+# EXTRACT COMMIT ID
+# ==========================
+
+def extract_commit(build_data):
+
+    for action in build_data.get("actions", []):
+        if "lastBuiltRevision" in action:
+            return action["lastBuiltRevision"]["SHA1"]
+
     return None
 
-def load_pr_files(repo, pr_id):
-    changed_files = get_pr_changed_files(pr_id)
-    for f in changed_files:
-        content = download_file_from_repo(f)
-        if content:
-            repo.add_file(f, content)
+# ==========================
+# GET CHANGED FILES
+# ==========================
 
-############################################################
-# SYMBOL RESOLUTION
-############################################################
+def get_changed_files(build_data):
 
-class SymbolResolver:
+    files = []
 
-    def __init__(self, repo):
-        self.repo = repo
-        self.class_map = {}
-        self.method_map = {}
-        self.method_params = {}
+    for change_set in build_data.get("changeSets", []):
+        for item in change_set.get("items", []):
+            for path in item.get("affectedPaths", []):
+                files.append(path)
 
-    def build_indexes(self):
+    return files
 
-        for path, code in self.repo.files.items():
+# ==========================
+# DOWNLOAD FILE FROM BITBUCKET
+# ==========================
 
-            if not path.endswith(".java"):
-                continue
+def download_file(file_path, commit):
 
-            try:
-                tree = javalang.parse.parse(code)
-            except:
-                continue
+    url = f"{BITBUCKET_URL}/rest/api/1.0/projects/{BITBUCKET_PROJECT}/repos/{BITBUCKET_REPO}/raw/{file_path}"
 
-            for _, node in tree.filter(javalang.tree.ClassDeclaration):
-                self.class_map[node.name] = path
+    params = {
+        "at": commit
+    }
 
-            for _, node in tree.filter(javalang.tree.MethodDeclaration):
+    r = bitbucket_session.get(url, params=params)
 
-                self.method_map[node.name] = path
+    if r.status_code != 200:
+        print("FAILED:", file_path)
+        return
 
-                params = []
+    local_path = os.path.join(LOCAL_REPO_PATH, file_path)
 
-                if node.parameters:
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-                    for p in node.parameters:
-                        params.append(p.name)
-
-                self.method_params[node.name] = params
-
-############################################################
-# AUTO DEPENDENCY FETCHER
-############################################################
-
-def fetch_missing_class(repo, class_name):
-
-    guess_paths = [
-        f"src/main/java/{class_name}.java",
-        f"src/{class_name}.java",
-        f"{class_name}.java"
-    ]
-
-    for guess in guess_paths:
-
-        code = download_file_from_repo(guess)
-
-        if code:
-
-            repo.add_file(guess, code)
-
-            return True
-
-    return False
-
-############################################################
-# CALL GRAPH BUILDER
-############################################################
-
-class CallGraphBuilder:
-
-    def __init__(self):
-
-        self.graph = defaultdict(list)
-
-    def build(self, repo, resolver):
-
-        for path, code in repo.files.items():
-
-            if not path.endswith(".java"):
-                continue
-
-            try:
-                tree = javalang.parse.parse(code)
-            except:
-                continue
-
-            for _, node in tree.filter(javalang.tree.MethodInvocation):
-
-                method = node.member
-
-                if method in resolver.method_map:
-
-                    target = resolver.method_map[method]
-
-                    args = []
-
-                    if node.arguments:
-
-                        for a in node.arguments:
-
-                            if hasattr(a, "member"):
-                                args.append(a.member)
-
-                            elif hasattr(a, "value"):
-                                args.append(str(a.value))
-
-                            else:
-                                args.append(str(a))
-
-                    self.graph[path].append({
-                        "target": target,
-                        "method": method,
-                        "args": args
-                    })
-
-############################################################
-# FLOW RESOLUTION
-############################################################
-
-class FlowResolver:
-
-    def __init__(self, graph):
-        self.graph = graph
-
-    def resolve(self, entry):
-
-        visited = set()
-        flow = []
-
-        q = deque([entry])
-
-        while q:
-
-            node = q.popleft()
-
-            if node in visited:
-                continue
-
-            visited.add(node)
-            flow.append(node)
-
-            for call in self.graph.get(node, []):
-
-                q.append(call["target"])
-
-        return flow
-
-############################################################
-# TAINT ANALYSIS WITH PARAMETER PROPAGATION
-############################################################
-
-class TaintAnalyzer:
-
-    def __init__(self):
-
-        self.tainted = set()
-
-    def analyze(self, repo, graph, resolver):
-
-        findings = []
-
-        for path, code in repo.files.items():
-
-            lines = code.splitlines()
-
-            for i, line in enumerate(lines):
-
-                for src in SOURCES:
-
-                    if src in line:
-
-                        parts = line.split("=")
-
-                        if len(parts) > 1:
-
-                            var = parts[0].split()[-1]
-
-                            self.tainted.add(var)
-
-                            findings.append(
-                                f"SOURCE | {path}:{i+1} | {line.strip()}"
-                            )
-
-        for caller, calls in graph.items():
-
-            for call in calls:
-
-                for arg in call["args"]:
-
-                    if arg in self.tainted:
-
-                        method = call["method"]
-
-                        params = resolver.method_params.get(method, [])
-
-                        for p in params:
-
-                            self.tainted.add(p)
-
-        for path, code in repo.files.items():
-
-            lines = code.splitlines()
-
-            for i, line in enumerate(lines):
-
-                for var in list(self.tainted):
-
-                    if var in line:
-
-                        for sink in SINKS:
-
-                            if sink in line:
-
-                                findings.append(
-                                    f"SINK | {path}:{i+1} | {line.strip()}"
-                                )
-
-        return findings
-
-############################################################
-# CONTEXT BUILDER
-############################################################
-
-class ContextBuilder:
-
-    def build(self, flow, findings):
-
-        text = "SECURITY FLOW\n\nFLOW\n"
-
-        for f in flow:
-            text += " → " + os.path.basename(f) + "\n"
-
-        text += "\nEVIDENCE\n"
-
-        for f in findings:
-            text += f + "\n"
-
-        return text
-
-############################################################
-# AI PROMPT GENERATOR
-############################################################
-
-def build_ai_prompt(context):
-
-    prompt = f"""
-You are performing secure code review.
-
-Below is the reconstructed execution flow from a Java application.
-
-{context}
-
-Determine:
-
-1. Whether SQL Injection is possible
-2. How user input reaches SQL execution
-3. Vulnerable file and method
-4. Recommended secure remediation
-
-Only analyze the provided flow.
-"""
-
-    return prompt
-
-############################################################
-# GUI APPLICATION
-############################################################
-
-class AppGUI:
-
-    def __init__(self, root):
-
-        self.root = root
-        self.root.title("AI AppSec Flow Analyzer")
-
-        self.repo = VirtualRepository()
-
-        top = tk.Frame(root)
-        top.pack(fill="x")
-
-        tk.Button(top, text="Load Local Repo", command=self.load_repo).pack(side="left")
-        tk.Button(top, text="Load PR", command=self.load_pr).pack(side="left")
-        tk.Button(top, text="Analyze", command=self.analyze).pack(side="left")
-
-        main = tk.PanedWindow(root)
-        main.pack(fill="both", expand=True)
-
-        self.tree = ttk.Treeview(main)
-        main.add(self.tree)
-
-        self.output = scrolledtext.ScrolledText(main)
-        main.add(self.output)
-
-    def load_repo(self):
-
-        path = filedialog.askdirectory()
-
-        if not path:
+    # Optional optimization: skip if same size
+    if os.path.exists(local_path):
+        if os.path.getsize(local_path) == len(r.content):
+            print("UNCHANGED:", file_path)
             return
 
-        self.repo.load_local_repo(path)
+    with open(local_path, "wb") as f:
+        f.write(r.content)
 
-        self.tree.delete(*self.tree.get_children())
+    print("UPDATED:", file_path)
 
-        for f in self.repo.files.keys():
-            self.tree.insert("", "end", text=f)
+# ==========================
+# MAIN UPDATE LOGIC
+# ==========================
 
-    def load_pr(self):
+def incremental_update():
 
-        pr_id = simpledialog.askstring("PR ID", "Enter Pull Request ID")
+    state = load_state()
 
-        if not pr_id:
-            return
+    last_processed_build = state.get("last_build", 0)
 
-        load_pr_files(self.repo, pr_id)
+    print("Last processed build:", last_processed_build)
 
-        self.tree.delete(*self.tree.get_children())
+    build_data = get_latest_build()
 
-        for f in self.repo.files.keys():
-            self.tree.insert("", "end", text=f)
+    current_build = build_data["number"]
 
-    def analyze(self):
+    print("Latest Jenkins build:", current_build)
 
-        resolver = SymbolResolver(self.repo)
-        resolver.build_indexes()
+    if current_build <= last_processed_build:
+        print("No new build to process.")
+        return
 
-        graph_builder = CallGraphBuilder()
-        graph_builder.build(self.repo, resolver)
+    commit = extract_commit(build_data)
 
-        graph = graph_builder.graph
+    if not commit:
+        print("Commit ID not found in Jenkins build.")
+        return
 
-        if len(self.repo.files) == 0:
-            return
+    print("Commit ID:", commit)
 
-        entry = list(self.repo.files.keys())[0]
+    changed_files = get_changed_files(build_data)
 
-        flow = FlowResolver(graph).resolve(entry)
+    print("Files changed:", len(changed_files))
 
-        findings = TaintAnalyzer().analyze(self.repo, graph, resolver)
+    for file_path in changed_files:
+        download_file(file_path, commit)
 
-        context = ContextBuilder().build(flow, findings)
+    state["last_build"] = current_build
+    save_state(state)
 
-        self.output.delete("1.0", tk.END)
-        self.output.insert(tk.END, context)
+    print("Incremental update completed.")
 
-        prompt = build_ai_prompt(context)
 
-        self.output.insert(tk.END, "\n\nAI PROMPT\n")
-        self.output.insert(tk.END, prompt)
+# ==========================
+# ENTRY POINT
+# ==========================
 
-############################################################
-# MAIN
-############################################################
-
-root = tk.Tk()
-
-app = AppGUI(root)
-
-root.mainloop()
+if __name__ == "__main__":
+    incremental_update()
