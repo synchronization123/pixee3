@@ -1,103 +1,236 @@
-# ai_appsec_flow_tool.py
-
 import os
+import re
+import requests
 import javalang
+import tkinter as tk
+from tkinter import filedialog, ttk, scrolledtext, simpledialog
 from collections import defaultdict, deque
 
-SOURCES = ["getParameter","getHeader","nextLine"]
-SINKS = ["executeQuery","executeUpdate","prepareStatement"]
+############################################################
+# BITBUCKET CONFIGURATION (PLACEHOLDERS)
+############################################################
 
-class VirtualRepo:
+BITBUCKET_BASE_URL = "https://bitbucket.example.com/rest/api/1.0"
+BITBUCKET_PROJECT = "PROJECT_KEY"
+BITBUCKET_REPO = "REPO_SLUG"
+
+BITBUCKET_TOKEN = os.getenv("BITBUCKET_TOKEN", "YOUR_BITBUCKET_TOKEN")
+
+BITBUCKET_HEADERS = {
+    "Authorization": f"Bearer {BITBUCKET_TOKEN}",
+    "Accept": "application/json"
+}
+
+############################################################
+# SECURITY PATTERNS
+############################################################
+
+SOURCES = [
+    "getParameter",
+    "getHeader",
+    "nextLine"
+]
+
+SINKS = [
+    "executeQuery",
+    "executeUpdate",
+    "prepareStatement",
+    "createStatement"
+]
+
+JAVA_EXT = (".java", ".jsp")
+
+############################################################
+# VIRTUAL REPOSITORY
+############################################################
+
+class VirtualRepository:
 
     def __init__(self):
         self.files = {}
 
-    def load(self, path):
-
-        for root,_,files in os.walk(path):
-
+    def load_local_repo(self, path):
+        for root, _, files in os.walk(path):
             for f in files:
-
-                if f.endswith((".java",".jsp")):
-
-                    full=os.path.join(root,f)
-
+                if f.endswith(JAVA_EXT):
+                    full = os.path.join(root, f)
                     try:
-                        with open(full,"r",errors="ignore") as fp:
-                            self.files[full]=fp.read()
+                        with open(full, "r", errors="ignore") as fp:
+                            self.files[full] = fp.read()
                     except:
                         pass
 
+    def add_file(self, path, content):
+        self.files[path] = content
+
+############################################################
+# BITBUCKET API HELPERS
+############################################################
+
+def get_pr_changed_files(pr_id):
+    url = f"{BITBUCKET_BASE_URL}/projects/{BITBUCKET_PROJECT}/repos/{BITBUCKET_REPO}/pull-requests/{pr_id}/changes"
+    try:
+        response = requests.get(url, headers=BITBUCKET_HEADERS)
+        data = response.json()
+        files = []
+        for v in data.get("values", []):
+            path = v["path"]["toString"]
+            files.append(path)
+        return files
+    except:
+        return []
+
+def download_file_from_repo(file_path, branch="master"):
+    url = f"{BITBUCKET_BASE_URL}/projects/{BITBUCKET_PROJECT}/repos/{BITBUCKET_REPO}/raw/{file_path}?at={branch}"
+    try:
+        response = requests.get(url, headers=BITBUCKET_HEADERS)
+        if response.status_code == 200:
+            return response.text
+    except:
+        pass
+    return None
+
+def load_pr_files(repo, pr_id):
+    changed_files = get_pr_changed_files(pr_id)
+    for f in changed_files:
+        content = download_file_from_repo(f)
+        if content:
+            repo.add_file(f, content)
+
+############################################################
+# SYMBOL RESOLUTION
+############################################################
 
 class SymbolResolver:
 
-    def __init__(self,repo):
+    def __init__(self, repo):
+        self.repo = repo
+        self.class_map = {}
+        self.method_map = {}
+        self.method_params = {}
 
-        self.repo=repo
-        self.class_map={}
-        self.method_map={}
+    def build_indexes(self):
 
-    def build(self):
-
-        for path,code in self.repo.files.items():
+        for path, code in self.repo.files.items():
 
             if not path.endswith(".java"):
                 continue
 
             try:
-                tree=javalang.parse.parse(code)
+                tree = javalang.parse.parse(code)
             except:
                 continue
 
-            for _,node in tree.filter(javalang.tree.ClassDeclaration):
-                self.class_map[node.name]=path
+            for _, node in tree.filter(javalang.tree.ClassDeclaration):
+                self.class_map[node.name] = path
 
-            for _,node in tree.filter(javalang.tree.MethodDeclaration):
-                self.method_map[node.name]=path
+            for _, node in tree.filter(javalang.tree.MethodDeclaration):
 
+                self.method_map[node.name] = path
 
-class CallGraph:
+                params = []
+
+                if node.parameters:
+
+                    for p in node.parameters:
+                        params.append(p.name)
+
+                self.method_params[node.name] = params
+
+############################################################
+# AUTO DEPENDENCY FETCHER
+############################################################
+
+def fetch_missing_class(repo, class_name):
+
+    guess_paths = [
+        f"src/main/java/{class_name}.java",
+        f"src/{class_name}.java",
+        f"{class_name}.java"
+    ]
+
+    for guess in guess_paths:
+
+        code = download_file_from_repo(guess)
+
+        if code:
+
+            repo.add_file(guess, code)
+
+            return True
+
+    return False
+
+############################################################
+# CALL GRAPH BUILDER
+############################################################
+
+class CallGraphBuilder:
 
     def __init__(self):
-        self.graph=defaultdict(set)
 
-    def build(self,repo,resolver):
+        self.graph = defaultdict(list)
 
-        for path,code in repo.files.items():
+    def build(self, repo, resolver):
+
+        for path, code in repo.files.items():
 
             if not path.endswith(".java"):
                 continue
 
             try:
-                tree=javalang.parse.parse(code)
+                tree = javalang.parse.parse(code)
             except:
                 continue
 
-            for _,node in tree.filter(javalang.tree.MethodInvocation):
+            for _, node in tree.filter(javalang.tree.MethodInvocation):
 
-                method=node.member
+                method = node.member
 
                 if method in resolver.method_map:
 
-                    target=resolver.method_map[method]
+                    target = resolver.method_map[method]
 
-                    self.graph[path].add(target)
+                    args = []
 
+                    if node.arguments:
+
+                        for a in node.arguments:
+
+                            if hasattr(a, "member"):
+                                args.append(a.member)
+
+                            elif hasattr(a, "value"):
+                                args.append(str(a.value))
+
+                            else:
+                                args.append(str(a))
+
+                    self.graph[path].append({
+                        "target": target,
+                        "method": method,
+                        "args": args
+                    })
+
+############################################################
+# FLOW RESOLUTION
+############################################################
 
 class FlowResolver:
 
-    def __init__(self,graph):
-        self.graph=graph
+    def __init__(self, graph):
+        self.graph = graph
 
-    def resolve(self,entry):
+    def resolve(self, entry):
 
-        visited=set()
-        flow=[]
-        q=deque([entry])
+        visited = set()
+        flow = []
+
+        q = deque([entry])
 
         while q:
 
-            node=q.popleft()
+            node = q.popleft()
 
             if node in visited:
                 continue
@@ -105,39 +238,71 @@ class FlowResolver:
             visited.add(node)
             flow.append(node)
 
-            for nxt in self.graph.get(node,[]):
-                q.append(nxt)
+            for call in self.graph.get(node, []):
+
+                q.append(call["target"])
 
         return flow
 
+############################################################
+# TAINT ANALYSIS WITH PARAMETER PROPAGATION
+############################################################
 
 class TaintAnalyzer:
 
-    def run(self,repo):
+    def __init__(self):
 
-        tainted=set()
-        findings=[]
+        self.tainted = set()
 
-        for path,code in repo.files.items():
+    def analyze(self, repo, graph, resolver):
 
-            for i,line in enumerate(code.splitlines()):
+        findings = []
+
+        for path, code in repo.files.items():
+
+            lines = code.splitlines()
+
+            for i, line in enumerate(lines):
 
                 for src in SOURCES:
 
                     if src in line:
 
-                        parts=line.split("=")
+                        parts = line.split("=")
 
-                        if len(parts)>1:
+                        if len(parts) > 1:
 
-                            var=parts[0].split()[-1]
-                            tainted.add(var)
+                            var = parts[0].split()[-1]
+
+                            self.tainted.add(var)
 
                             findings.append(
                                 f"SOURCE | {path}:{i+1} | {line.strip()}"
                             )
 
-                for var in list(tainted):
+        for caller, calls in graph.items():
+
+            for call in calls:
+
+                for arg in call["args"]:
+
+                    if arg in self.tainted:
+
+                        method = call["method"]
+
+                        params = resolver.method_params.get(method, [])
+
+                        for p in params:
+
+                            self.tainted.add(p)
+
+        for path, code in repo.files.items():
+
+            lines = code.splitlines()
+
+            for i, line in enumerate(lines):
+
+                for var in list(self.tainted):
 
                     if var in line:
 
@@ -146,50 +311,148 @@ class TaintAnalyzer:
                             if sink in line:
 
                                 findings.append(
-                                  f"SINK | {path}:{i+1} | {line.strip()}"
+                                    f"SINK | {path}:{i+1} | {line.strip()}"
                                 )
 
         return findings
 
+############################################################
+# CONTEXT BUILDER
+############################################################
 
 class ContextBuilder:
 
-    def build(self,flow,findings):
+    def build(self, flow, findings):
 
-        text="SECURITY FLOW\n\nFLOW\n"
+        text = "SECURITY FLOW\n\nFLOW\n"
 
         for f in flow:
-            text+=f" → {os.path.basename(f)}\n"
+            text += " → " + os.path.basename(f) + "\n"
 
-        text+="\nEVIDENCE\n"
+        text += "\nEVIDENCE\n"
 
         for f in findings:
-            text+=f+"\n"
+            text += f + "\n"
 
         return text
 
+############################################################
+# AI PROMPT GENERATOR
+############################################################
 
-def main():
+def build_ai_prompt(context):
 
-    repo=VirtualRepo()
-    repo.load("./repo")
+    prompt = f"""
+You are performing secure code review.
 
-    resolver=SymbolResolver(repo)
-    resolver.build()
+Below is the reconstructed execution flow from a Java application.
 
-    graph=CallGraph()
-    graph.build(repo,resolver)
+{context}
 
-    entry=list(repo.files.keys())[0]
+Determine:
 
-    flow=FlowResolver(graph.graph).resolve(entry)
+1. Whether SQL Injection is possible
+2. How user input reaches SQL execution
+3. Vulnerable file and method
+4. Recommended secure remediation
 
-    findings=TaintAnalyzer().run(repo)
+Only analyze the provided flow.
+"""
 
-    context=ContextBuilder().build(flow,findings)
+    return prompt
 
-    print(context)
+############################################################
+# GUI APPLICATION
+############################################################
 
+class AppGUI:
 
-if __name__=="__main__":
-    main()
+    def __init__(self, root):
+
+        self.root = root
+        self.root.title("AI AppSec Flow Analyzer")
+
+        self.repo = VirtualRepository()
+
+        top = tk.Frame(root)
+        top.pack(fill="x")
+
+        tk.Button(top, text="Load Local Repo", command=self.load_repo).pack(side="left")
+        tk.Button(top, text="Load PR", command=self.load_pr).pack(side="left")
+        tk.Button(top, text="Analyze", command=self.analyze).pack(side="left")
+
+        main = tk.PanedWindow(root)
+        main.pack(fill="both", expand=True)
+
+        self.tree = ttk.Treeview(main)
+        main.add(self.tree)
+
+        self.output = scrolledtext.ScrolledText(main)
+        main.add(self.output)
+
+    def load_repo(self):
+
+        path = filedialog.askdirectory()
+
+        if not path:
+            return
+
+        self.repo.load_local_repo(path)
+
+        self.tree.delete(*self.tree.get_children())
+
+        for f in self.repo.files.keys():
+            self.tree.insert("", "end", text=f)
+
+    def load_pr(self):
+
+        pr_id = simpledialog.askstring("PR ID", "Enter Pull Request ID")
+
+        if not pr_id:
+            return
+
+        load_pr_files(self.repo, pr_id)
+
+        self.tree.delete(*self.tree.get_children())
+
+        for f in self.repo.files.keys():
+            self.tree.insert("", "end", text=f)
+
+    def analyze(self):
+
+        resolver = SymbolResolver(self.repo)
+        resolver.build_indexes()
+
+        graph_builder = CallGraphBuilder()
+        graph_builder.build(self.repo, resolver)
+
+        graph = graph_builder.graph
+
+        if len(self.repo.files) == 0:
+            return
+
+        entry = list(self.repo.files.keys())[0]
+
+        flow = FlowResolver(graph).resolve(entry)
+
+        findings = TaintAnalyzer().analyze(self.repo, graph, resolver)
+
+        context = ContextBuilder().build(flow, findings)
+
+        self.output.delete("1.0", tk.END)
+        self.output.insert(tk.END, context)
+
+        prompt = build_ai_prompt(context)
+
+        self.output.insert(tk.END, "\n\nAI PROMPT\n")
+        self.output.insert(tk.END, prompt)
+
+############################################################
+# MAIN
+############################################################
+
+root = tk.Tk()
+
+app = AppGUI(root)
+
+root.mainloop()
