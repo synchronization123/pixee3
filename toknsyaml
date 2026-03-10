@@ -1,106 +1,195 @@
-You are a Senior Application Security Engineer performing a security review of a Pull Request before it is merged.
+# ai_appsec_flow_tool.py
 
-Your task is to analyze the provided Pull Request code changes and identify any security vulnerabilities, insecure coding practices, or risky logic introduced by the modifications.
+import os
+import javalang
+from collections import defaultdict, deque
 
----
+SOURCES = ["getParameter","getHeader","nextLine"]
+SINKS = ["executeQuery","executeUpdate","prepareStatement"]
 
-PULL REQUEST CONTEXT
+class VirtualRepo:
 
-Pull Request ID: {PR_ID}
+    def __init__(self):
+        self.files = {}
 
-Pull Request Description:
-{PR_DESCRIPTION}
+    def load(self, path):
 
-Files Included in Pull Request:
-{FILE_LIST}
+        for root,_,files in os.walk(path):
 
-Pull Request Code Changes (Diff or Full Files):
-{PR_CODE}
+            for f in files:
 
-Optional Static Analysis Findings:
-{SAST_RESULTS}
+                if f.endswith((".java",".jsp")):
 
----
+                    full=os.path.join(root,f)
 
-OBJECTIVE
+                    try:
+                        with open(full,"r",errors="ignore") as fp:
+                            self.files[full]=fp.read()
+                    except:
+                        pass
 
-Analyze the Pull Request changes and determine whether the modifications introduce security risks.
 
-Focus on detecting vulnerabilities related to:
+class SymbolResolver:
 
-• OWASP Top 10
-• CWE Top 25
-• Injection vulnerabilities (SQL, OS Command, NoSQL, LDAP)
-• Cross-Site Scripting (XSS)
-• Authentication and authorization flaws
-• Privilege escalation
-• Hardcoded secrets, tokens, API keys, credentials
-• Sensitive data exposure
-• Insecure cryptography usage
-• Insecure deserialization
-• Path traversal or file upload issues
-• SSRF vulnerabilities
-• Business logic flaws
-• Insecure API calls
-• Improper input validation
-• Logging of sensitive information
+    def __init__(self,repo):
 
----
+        self.repo=repo
+        self.class_map={}
+        self.method_map={}
 
-ANALYSIS GUIDELINES
+    def build(self):
 
-1. Focus only on the code provided in this Pull Request.
-2. Determine if the changes introduce any security vulnerabilities.
-3. Trace possible user-controlled input flows to sensitive operations.
-4. Identify unsafe patterns or dangerous functions.
-5. Detect accidental inclusion of secrets or credentials.
-6. Evaluate whether security checks were removed or weakened.
+        for path,code in self.repo.files.items():
 
----
+            if not path.endswith(".java"):
+                continue
 
-FOR EACH SECURITY ISSUE FOUND
+            try:
+                tree=javalang.parse.parse(code)
+            except:
+                continue
 
-Provide the following details:
+            for _,node in tree.filter(javalang.tree.ClassDeclaration):
+                self.class_map[node.name]=path
 
-• Vulnerability Title
-• Severity (Critical / High / Medium / Low)
-• CWE ID
-• OWASP Category
-• File Name
-• Line Number
-• Vulnerable Code Snippet
-• Root Cause
-• Exploitation Scenario
-• Security Impact
-• Recommended Fix
-• Secure Code Example (if applicable)
+            for _,node in tree.filter(javalang.tree.MethodDeclaration):
+                self.method_map[node.name]=path
 
----
 
-OUTPUT FORMAT
+class CallGraph:
 
-1. Executive Summary
-2. Security Findings
-3. Risk Assessment
-4. Exploitation Scenarios
-5. Remediation Recommendations
+    def __init__(self):
+        self.graph=defaultdict(set)
 
----
+    def build(self,repo,resolver):
 
-FINAL SECURITY DECISION
+        for path,code in repo.files.items():
 
-Provide a final decision:
+            if not path.endswith(".java"):
+                continue
 
-APPROVE – No security issues detected
-APPROVE WITH COMMENTS – Minor security concerns
-SECURITY CHANGES REQUIRED – Security vulnerabilities found
+            try:
+                tree=javalang.parse.parse(code)
+            except:
+                continue
 
----
+            for _,node in tree.filter(javalang.tree.MethodInvocation):
 
-IMPORTANT RULES
+                method=node.member
 
-• Only report vulnerabilities supported by clear code evidence.
-• Do not guess vulnerabilities without proof.
-• If no vulnerabilities are detected, clearly state:
+                if method in resolver.method_map:
 
-"No confirmed security vulnerabilities introduced in this Pull Request."
+                    target=resolver.method_map[method]
+
+                    self.graph[path].add(target)
+
+
+class FlowResolver:
+
+    def __init__(self,graph):
+        self.graph=graph
+
+    def resolve(self,entry):
+
+        visited=set()
+        flow=[]
+        q=deque([entry])
+
+        while q:
+
+            node=q.popleft()
+
+            if node in visited:
+                continue
+
+            visited.add(node)
+            flow.append(node)
+
+            for nxt in self.graph.get(node,[]):
+                q.append(nxt)
+
+        return flow
+
+
+class TaintAnalyzer:
+
+    def run(self,repo):
+
+        tainted=set()
+        findings=[]
+
+        for path,code in repo.files.items():
+
+            for i,line in enumerate(code.splitlines()):
+
+                for src in SOURCES:
+
+                    if src in line:
+
+                        parts=line.split("=")
+
+                        if len(parts)>1:
+
+                            var=parts[0].split()[-1]
+                            tainted.add(var)
+
+                            findings.append(
+                                f"SOURCE | {path}:{i+1} | {line.strip()}"
+                            )
+
+                for var in list(tainted):
+
+                    if var in line:
+
+                        for sink in SINKS:
+
+                            if sink in line:
+
+                                findings.append(
+                                  f"SINK | {path}:{i+1} | {line.strip()}"
+                                )
+
+        return findings
+
+
+class ContextBuilder:
+
+    def build(self,flow,findings):
+
+        text="SECURITY FLOW\n\nFLOW\n"
+
+        for f in flow:
+            text+=f" → {os.path.basename(f)}\n"
+
+        text+="\nEVIDENCE\n"
+
+        for f in findings:
+            text+=f+"\n"
+
+        return text
+
+
+def main():
+
+    repo=VirtualRepo()
+    repo.load("./repo")
+
+    resolver=SymbolResolver(repo)
+    resolver.build()
+
+    graph=CallGraph()
+    graph.build(repo,resolver)
+
+    entry=list(repo.files.keys())[0]
+
+    flow=FlowResolver(graph.graph).resolve(entry)
+
+    findings=TaintAnalyzer().run(repo)
+
+    context=ContextBuilder().build(flow,findings)
+
+    print(context)
+
+
+if __name__=="__main__":
+    main()
