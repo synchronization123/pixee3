@@ -1,103 +1,104 @@
-# meeting_notes_generator.pyw
-# To run: pip install streamlit python-docx openai
-# Set your OpenAI API key as environment variable: export OPENAI_API_KEY='your-key-here'
-# Then: streamlit run meeting_notes_generator.pyw
-# This will open in your browser automatically.
+# OWASP WSTG Latest (v5.0 Development) - Test Case Prompt for Codex CLI
+**File:** `WSTG-INFO-01.md`  
+**Test Case ID:** WSTG-INFO-01  
+**Title:** Conduct Search Engine Discovery Reconnaissance for Information Leakage  
+**Category:** 4.1 Information Gathering  
+**Purpose for Codex CLI:** Targeted secure code review with full inter-file sink-source taint tracing and backtracking.
 
-import streamlit as st
-from docx import Document
-from openai import OpenAI
-import os
-import io
+---
 
-# Configure page
-st.set_page_config(page_title="Meeting Notes Generator", layout="wide")
-st.title("Meeting Notes Generator")
-st.markdown("Upload a DOCX file containing meeting conversations to generate structured notes.")
+## DETAILED TEST CASE (Embedded for Codex CLI Context)
 
-# File uploader
-uploaded_file = st.file_uploader("Choose a DOCX file", type="docx")
+### Summary
+In order for search engines to work, computer programs (or robots) regularly fetch data (referred to as crawling) from billions of pages on the web. These programs find web content and functionality by following links from other pages, or by looking at sitemaps. If a site uses a special file called robots.txt to list pages that it does not want search engines to fetch, then the pages listed there will be ignored.
 
-if uploaded_file is not None:
-    # Display loading modal/spinner
-    with st.spinner("Processing document and generating notes... This may take a moment."):
-        
-        # Extract text from DOCX
-        doc = Document(io.BytesIO(uploaded_file.read()))
-        full_text = "\n".join([paragraph.text for paragraph in doc.paragraphs if paragraph.text.strip()]).strip()
-        
-        if not full_text:
-            st.error("No text found in the document.")
-        else:
-            # Initialize OpenAI client (assumes API key is set in env)
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            
-            if not client.api_key:
-                st.error("OpenAI API key not found. Set OPENAI_API_KEY environment variable.")
-            else:
-                # Craft prompt for structured notes
-                prompt = f"""
-                You are an expert meeting note taker. Analyze the following DOCX conversation transcript and generate structured meeting notes in Markdown format.
-                
-                Transcript:
-                {full_text}
-                
-                Output exactly in this structure (use Markdown for tables and headings):
-                
-                # Meeting Notes
-                
-                ## Date
-                [Extract the meeting date from the transcript or infer the most relevant one. Format: YYYY-MM-DD]
-                
-                ## Attendees
-                - [List all unique participants mentioned, e.g., - John Doe]
-                
-                ## Meeting Summary
-                [A concise 3-5 sentence summary of the key points, decisions, and overall purpose of the meeting.]
-                
-                ## Topics Discussed
-                | Topic | Brief Description |
-                |-------|-------------------|
-                [Row for each main topic, e.g., | Topic 1 | Short desc |
-                
-                ## Detailed Discussions
-                [For each topic, provide a detailed table. Repeat sections as needed for multiple topics.]
-                
-                ### [Topic Name]
-                | Discussion Details | Person(s) Involved | Outcome | Action Items | Notes (Dates, etc.) |
-                |--------------------|--------------------|---------|--------------|---------------------|
-                [Rows for key exchanges under this topic, e.g., | Summary of points raised | John Doe, Jane Smith | Agreement reached | Assign task to Bob by due date | Due: 2026-03-15 |
-                
-                Use 'N/A' where info is not applicable. Ensure tables are complete and parseable. If multiple topics, add more ### sections.
-                """
-                
-                # Call OpenAI API
-                try:
-                    response = client.chat.completions.create(
-                        model="gpt-4o-mini",  # Or use "gpt-3.5-turbo" for cost savings
-                        messages=[{"role": "system", "content": "You are a precise and structured note generator."},
-                                  {"role": "user", "content": prompt}],
-                        temperature=0.3,
-                        max_tokens=2000
-                    )
-                    
-                    generated_notes = response.choices[0].message.content
-                    
-                    # Display the notes
-                    st.markdown("### Generated Meeting Notes")
-                    st.markdown(generated_notes)
-                    
-                    # Optional: Download button for notes
-                    st.download_button(
-                        label="Download Notes as MD",
-                        data=generated_notes,
-                        file_name="meeting_notes.md",
-                        mime="text/markdown"
-                    )
-                    
-                except Exception as e:
-                    st.error(f"Error generating notes: {str(e)}. Check your API key and quota.")
+Testers can use search engines to perform reconnaissance on sites and web applications. There are direct and indirect elements to search engine discovery and reconnaissance: direct methods relate to searching the indices and the associated content from caches, while indirect methods relate to learning sensitive design and configuration information by searching forums, newsgroups, and tendering sites.
 
-# Footer
-st.markdown("---")
-st.markdown("Powered by Streamlit and OpenAI. Ensure your DOCX contains clear conversation text for best results.")
+Once a search engine robot has completed crawling, it commences indexing the web content based on tags and associated attributes, such as `<TITLE>`, in order to return relevant search results. If the robots.txt file is not updated during the lifetime of the site, and in-line HTML meta tags that instruct robots not to index content have not been used, then it is possible for indices to contain web content not intended to be included by the owners. Site owners may use the previously mentioned robots.txt, HTML meta tags, authentication, and tools provided by search engines to remove such content.
+
+### Test Objectives
+- Identify what sensitive design and configuration information of the application, system, or organization is exposed directly (on the organization’s site) or indirectly (via third-party services).
+
+### How to Test (Key Concepts for Code Review)
+Use a search engine to search for potentially sensitive information. This may include:
+- Network diagrams and configurations
+- Archived posts and emails by administrators or other key staff
+- Logon procedures and username formats
+- Usernames, passwords, and private keys
+- Third-party or cloud service configuration files
+- Revealing error message content
+- Non-public applications (development, test, UAT, and staging versions of sites)
+
+**Relevant Search Techniques (that code must prevent):**
+- `site:`, `inurl:`, `intitle:`, `intext:`, `filetype:` operators
+- Internet Archive Wayback Machine snapshots
+- Google Hacking / Dorking (e.g., files containing passwords, error messages, sensitive directories)
+- Cached content services (archive.ph, CachedView, etc.)
+
+**Common Leakage Vectors in Code:**
+- Hardcoded credentials, API keys, or private keys in source/config files
+- Debug/error messages that reveal stack traces, paths, versions, or internal data
+- Lack of `robots.txt` or `<meta name="robots" content="noindex, nofollow">` on sensitive pages
+- Publicly accessible backup, .git, .env, config, or log files
+- Staging/dev endpoints or versioned apps left in production code
+- Comments in HTML/JS containing sensitive design info
+- Exposed directory listings or unfiltered file uploads
+
+### Remediation
+- Carefully consider the sensitivity of design and configuration information before it is posted online.
+- Periodically review the sensitivity of existing design and configuration information that is posted online.
+- Implement proper robots.txt rules, noindex/nofollow meta tags, and access controls (authentication, IP whitelisting) on sensitive paths.
+- Remove or obfuscate sensitive data from public-facing code, comments, and error responses.
+- Use environment variables/secrets management instead of hardcoding.
+- Ensure development/staging environments are not discoverable or indexed.
+- Sanitize error messages and disable directory listing.
+
+**Note:** This test case focuses on information leakage vulnerabilities through search engine discovery, including exposure of sensitive design, configuration, credentials, error messages, and non-public application versions via indexed content, caches, and archives.
+
+---
+
+## PROMPT FOR CODEX CLI (Copy-Paste This Entire Block)
+
+You are an expert secure code reviewer and OWASP WSTG compliance auditor. Perform a **targeted secure code review** strictly against **WSTG-INFO-01: Conduct Search Engine Discovery Reconnaissance for Information Leakage**.
+
+Use ONLY the embedded test case details above (Summary, Test Objectives, How to Test, Remediation, Note) as your reference. Do not reference any other OWASP documents unless they are explicitly mentioned.
+
+**Review Instructions:**
+1. Scan the entire codebase located at the local repository path provided by the user.
+2. Specifically check for the leakage vectors listed in the test case above.
+
+**Advanced Taint Analysis & Cross-File Tracing (MANDATORY):**
+- This is NOT simple pattern matching or grep. You MUST perform full **sink-source taint analysis** across the entire repository.
+- Identify every potential **SOURCE** of sensitive information (hardcoded credentials, API keys, error objects, config loads, version strings, internal URLs, stack traces, debug variables, comments, template variables, etc.).
+- **Backtrack** from every variable, function parameter, return value, import, class property, assignment, or inheritance all the way to its original definition — even if it lives in a completely different file.
+- **Forward-track** the data flow to every possible **SINK** (HTML output, JSON responses, error pages, log writes, template rendering, robots.txt generation, file system writes, meta tags, public endpoints, comments in source files, build artifacts, etc.).
+- You are explicitly allowed and required to jump between files freely, follow imports/requires/includes, traverse class hierarchies, follow function calls, and return to the original source file to close the loop.
+- For every potential issue, you MUST prove a complete, reachable data-flow path in this exact format:SOURCE (file:line) → [step 1 (file:line)] → [step 2 (file:line)] → ... → SINK (file:line)
+- If the flow is broken (sanitized, never reaches a public sink, behind authentication, only in dev-only code paths, or dead code), classify it as **False Positive** and clearly state the exact breaking point in the trace.
+- Only report **True Positives** where sensitive data can actually reach an externally discoverable location that search engines can index.
+- If the flow cannot be fully confirmed due to missing context, label it "Possible – requires manual verification" instead of flagging it as a finding.
+
+**For every finding:**
+- Quote the exact code snippet(s) with full file path(s) and line numbers
+- Show the complete taint trace (source → sink)
+- Explain exactly how it leads to search-engine discoverable leakage (with example Google dork if applicable)
+- Assign severity (Critical / High / Medium / Low / Informational)
+- Provide precise remediation code or configuration changes aligned with the test case
+- If this would have been a false positive in a simple scan, explain why the tracing now confirms or rejects it
+
+3. If no true-positive issues are found after full tracing, explicitly state: "No WSTG-INFO-01 issues detected after full cross-file taint analysis."
+4. End with a summary table:
+ | Finding | Location(s) | Severity | Taint Trace (summary) | Remediation Priority |
+ |---------|-------------|----------|-----------------------|----------------------|
+
+**Codebase Location:**  
+The repository to review is at the local path shared by the user:  
+[LOCAL_REPO_PATH]
+
+Now perform the review with full backtracking, cross-file tracing, and sink-source taint analysis.
+
+---
+
+**How to use with Codex CLI:**
+```bash
+codex review --prompt WSTG-INFO-01.md --path /path/to/your/local/repo
