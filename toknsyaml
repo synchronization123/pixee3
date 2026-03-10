@@ -1,171 +1,103 @@
+# meeting_notes_generator.pyw
+# To run: pip install streamlit python-docx openai
+# Set your OpenAI API key as environment variable: export OPENAI_API_KEY='your-key-here'
+# Then: streamlit run meeting_notes_generator.pyw
+# This will open in your browser automatically.
+
+import streamlit as st
+from docx import Document
+from openai import OpenAI
 import os
-import json
-import requests
+import io
 
-# ==========================
-# CONFIGURATION
-# ==========================
+# Configure page
+st.set_page_config(page_title="Meeting Notes Generator", layout="wide")
+st.title("Meeting Notes Generator")
+st.markdown("Upload a DOCX file containing meeting conversations to generate structured notes.")
 
-JENKINS_URL = "http://jenkins.company.com"
-JENKINS_JOB = "your-job-name"
+# File uploader
+uploaded_file = st.file_uploader("Choose a DOCX file", type="docx")
 
-JENKINS_USER = "jenkins_user"
-JENKINS_TOKEN = "jenkins_api_token"
+if uploaded_file is not None:
+    # Display loading modal/spinner
+    with st.spinner("Processing document and generating notes... This may take a moment."):
+        
+        # Extract text from DOCX
+        doc = Document(io.BytesIO(uploaded_file.read()))
+        full_text = "\n".join([paragraph.text for paragraph in doc.paragraphs if paragraph.text.strip()]).strip()
+        
+        if not full_text:
+            st.error("No text found in the document.")
+        else:
+            # Initialize OpenAI client (assumes API key is set in env)
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            
+            if not client.api_key:
+                st.error("OpenAI API key not found. Set OPENAI_API_KEY environment variable.")
+            else:
+                # Craft prompt for structured notes
+                prompt = f"""
+                You are an expert meeting note taker. Analyze the following DOCX conversation transcript and generate structured meeting notes in Markdown format.
+                
+                Transcript:
+                {full_text}
+                
+                Output exactly in this structure (use Markdown for tables and headings):
+                
+                # Meeting Notes
+                
+                ## Date
+                [Extract the meeting date from the transcript or infer the most relevant one. Format: YYYY-MM-DD]
+                
+                ## Attendees
+                - [List all unique participants mentioned, e.g., - John Doe]
+                
+                ## Meeting Summary
+                [A concise 3-5 sentence summary of the key points, decisions, and overall purpose of the meeting.]
+                
+                ## Topics Discussed
+                | Topic | Brief Description |
+                |-------|-------------------|
+                [Row for each main topic, e.g., | Topic 1 | Short desc |
+                
+                ## Detailed Discussions
+                [For each topic, provide a detailed table. Repeat sections as needed for multiple topics.]
+                
+                ### [Topic Name]
+                | Discussion Details | Person(s) Involved | Outcome | Action Items | Notes (Dates, etc.) |
+                |--------------------|--------------------|---------|--------------|---------------------|
+                [Rows for key exchanges under this topic, e.g., | Summary of points raised | John Doe, Jane Smith | Agreement reached | Assign task to Bob by due date | Due: 2026-03-15 |
+                
+                Use 'N/A' where info is not applicable. Ensure tables are complete and parseable. If multiple topics, add more ### sections.
+                """
+                
+                # Call OpenAI API
+                try:
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",  # Or use "gpt-3.5-turbo" for cost savings
+                        messages=[{"role": "system", "content": "You are a precise and structured note generator."},
+                                  {"role": "user", "content": prompt}],
+                        temperature=0.3,
+                        max_tokens=2000
+                    )
+                    
+                    generated_notes = response.choices[0].message.content
+                    
+                    # Display the notes
+                    st.markdown("### Generated Meeting Notes")
+                    st.markdown(generated_notes)
+                    
+                    # Optional: Download button for notes
+                    st.download_button(
+                        label="Download Notes as MD",
+                        data=generated_notes,
+                        file_name="meeting_notes.md",
+                        mime="text/markdown"
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Error generating notes: {str(e)}. Check your API key and quota.")
 
-BITBUCKET_URL = "https://bitbucket.company.com"
-BITBUCKET_PROJECT = "PROJECTKEY"
-BITBUCKET_REPO = "repo-name"
-
-BITBUCKET_USER = "bitbucket_user"
-BITBUCKET_PASS = "bitbucket_password"
-
-LOCAL_REPO_PATH = "./repo"
-
-STATE_FILE = "jenkins_state.json"
-
-# ==========================
-# SESSION SETUP
-# ==========================
-
-jenkins_session = requests.Session()
-jenkins_session.auth = (JENKINS_USER, JENKINS_TOKEN)
-
-bitbucket_session = requests.Session()
-bitbucket_session.auth = (BITBUCKET_USER, BITBUCKET_PASS)
-
-# ==========================
-# STATE MANAGEMENT
-# ==========================
-
-def load_state():
-    if not os.path.exists(STATE_FILE):
-        return {"last_build": 0}
-    with open(STATE_FILE, "r") as f:
-        return json.load(f)
-
-def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
-
-# ==========================
-# GET LATEST BUILD INFO
-# ==========================
-
-def get_latest_build():
-
-    url = f"{JENKINS_URL}/job/{JENKINS_JOB}/lastBuild/api/json"
-
-    r = jenkins_session.get(url)
-    r.raise_for_status()
-
-    return r.json()
-
-# ==========================
-# EXTRACT COMMIT ID
-# ==========================
-
-def extract_commit(build_data):
-
-    for action in build_data.get("actions", []):
-        if "lastBuiltRevision" in action:
-            return action["lastBuiltRevision"]["SHA1"]
-
-    return None
-
-# ==========================
-# GET CHANGED FILES
-# ==========================
-
-def get_changed_files(build_data):
-
-    files = []
-
-    for change_set in build_data.get("changeSets", []):
-        for item in change_set.get("items", []):
-            for path in item.get("affectedPaths", []):
-                files.append(path)
-
-    return files
-
-# ==========================
-# DOWNLOAD FILE FROM BITBUCKET
-# ==========================
-
-def download_file(file_path, commit):
-
-    url = f"{BITBUCKET_URL}/rest/api/1.0/projects/{BITBUCKET_PROJECT}/repos/{BITBUCKET_REPO}/raw/{file_path}"
-
-    params = {
-        "at": commit
-    }
-
-    r = bitbucket_session.get(url, params=params)
-
-    if r.status_code != 200:
-        print("FAILED:", file_path)
-        return
-
-    local_path = os.path.join(LOCAL_REPO_PATH, file_path)
-
-    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-    # Optional optimization: skip if same size
-    if os.path.exists(local_path):
-        if os.path.getsize(local_path) == len(r.content):
-            print("UNCHANGED:", file_path)
-            return
-
-    with open(local_path, "wb") as f:
-        f.write(r.content)
-
-    print("UPDATED:", file_path)
-
-# ==========================
-# MAIN UPDATE LOGIC
-# ==========================
-
-def incremental_update():
-
-    state = load_state()
-
-    last_processed_build = state.get("last_build", 0)
-
-    print("Last processed build:", last_processed_build)
-
-    build_data = get_latest_build()
-
-    current_build = build_data["number"]
-
-    print("Latest Jenkins build:", current_build)
-
-    if current_build <= last_processed_build:
-        print("No new build to process.")
-        return
-
-    commit = extract_commit(build_data)
-
-    if not commit:
-        print("Commit ID not found in Jenkins build.")
-        return
-
-    print("Commit ID:", commit)
-
-    changed_files = get_changed_files(build_data)
-
-    print("Files changed:", len(changed_files))
-
-    for file_path in changed_files:
-        download_file(file_path, commit)
-
-    state["last_build"] = current_build
-    save_state(state)
-
-    print("Incremental update completed.")
-
-
-# ==========================
-# ENTRY POINT
-# ==========================
-
-if __name__ == "__main__":
-    incremental_update()
+# Footer
+st.markdown("---")
+st.markdown("Powered by Streamlit and OpenAI. Ensure your DOCX contains clear conversation text for best results.")
