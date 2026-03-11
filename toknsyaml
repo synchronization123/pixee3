@@ -2,112 +2,107 @@ import requests
 import pandas as pd
 import datetime
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --------------------------------------------------
-# CONFIGURATION
-# --------------------------------------------------
+# ---------------------------------------
+# CONFIG
+# ---------------------------------------
 
 JENKINS_URL = "https://your-jenkins-url"
 USERNAME = "username"
 API_TOKEN = "api_token"
 
-MAX_WORKERS = 20
 OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
 
 session = requests.Session()
 session.auth = (USERNAME, API_TOKEN)
 
-# --------------------------------------------------
+records = []
+
+# ---------------------------------------
 # TIME FILTER
-# --------------------------------------------------
+# ---------------------------------------
 
 now = datetime.datetime.utcnow()
 eight_hours_ago = now - datetime.timedelta(hours=8)
 eight_hours_epoch = int(eight_hours_ago.timestamp() * 1000)
 
-records = []
+# ---------------------------------------
+# DEPTH 1 — FETCH JOBS
+# ---------------------------------------
 
-# --------------------------------------------------
-# DEPTH 1 – FETCH JOBS
-# --------------------------------------------------
-
-print("Fetching jobs (Depth 1)...")
+print("Depth 1: Fetching jobs...")
 
 jobs_api = f"{JENKINS_URL}/api/json?depth=1"
 
-response = session.get(jobs_api)
+data = session.get(jobs_api).json()
 
-if response.status_code != 200:
-    print("Failed to fetch jobs")
-    exit()
+jobs = data.get("jobs", [])
 
-jobs = response.json().get("jobs", [])
+print("Jobs found:", len(jobs))
 
-print("Total jobs:", len(jobs))
+# ---------------------------------------
+# LOOP JOBS
+# ---------------------------------------
 
-# --------------------------------------------------
-# FUNCTION TO PROCESS EACH JOB
-# --------------------------------------------------
-
-def process_job(job):
+for job in jobs:
 
     job_name = job["name"]
-    job_records = []
 
-    try:
+    print("Checking job:", job_name)
 
-        # -----------------------------
-        # DEPTH 2 – BUILDS
-        # -----------------------------
+    # ---------------------------------------
+    # DEPTH 2 — BUILDS
+    # ---------------------------------------
 
-        depth2_api = f"{JENKINS_URL}/job/{job_name}/api/json?depth=2"
+    depth2_api = f"{JENKINS_URL}/job/{job_name}/api/json?depth=2"
 
-        r2 = session.get(depth2_api, timeout=30)
+    r2 = session.get(depth2_api)
 
-        if r2.status_code != 200:
-            return []
+    if r2.status_code != 200:
+        continue
 
-        job_data = r2.json()
-        builds = job_data.get("builds", [])
+    job_data = r2.json()
 
-        for build in builds:
+    builds = job_data.get("builds", [])
 
-            timestamp = build.get("timestamp")
+    for build in builds:
 
-            if not timestamp:
-                continue
+        timestamp = build.get("timestamp")
 
-            if timestamp < eight_hours_epoch:
-                continue
+        if not timestamp:
+            continue
 
-            build_number = build.get("number")
-            build_url = build.get("url")
-            result = build.get("result")
+        if timestamp < eight_hours_epoch:
+            continue
 
-            build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
+        build_number = build["number"]
+        build_url = build["url"]
+        result = build.get("result")
 
-            trigger_user = ""
-            trigger_type = ""
+        build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
 
-            # -----------------------------
-            # DEPTH 3
-            # -----------------------------
+        trigger_user = ""
+        trigger_type = ""
 
-            depth3_api = f"{build_url}api/json?depth=3"
+        # ---------------------------------------
+        # DEPTH 3
+        # ---------------------------------------
 
-            r3 = session.get(depth3_api, timeout=30)
+        depth3_api = f"{build_url}api/json?depth=3"
 
-            if r3.status_code != 200:
-                continue
+        r3 = session.get(depth3_api)
 
-            # -----------------------------
+        if r3.status_code == 200:
+
+            data3 = r3.json()
+
+            # ---------------------------------------
             # DEPTH 4
-            # -----------------------------
+            # ---------------------------------------
 
             depth4_api = f"{build_url}api/json?depth=4"
 
-            r4 = session.get(depth4_api, timeout=30)
+            r4 = session.get(depth4_api)
 
             if r4.status_code == 200:
 
@@ -128,38 +123,19 @@ def process_job(job):
                             elif cause.get("shortDescription"):
                                 trigger_type = cause["shortDescription"]
 
-            job_records.append({
-                "Job Name": job_name,
-                "Build Number": build_number,
-                "Build URL": build_url,
-                "Build Time": build_time,
-                "Result": result,
-                "Trigger Type": trigger_type,
-                "Triggered By": trigger_user
-            })
+        records.append({
+            "Job Name": job_name,
+            "Build Number": build_number,
+            "Build URL": build_url,
+            "Build Time": build_time,
+            "Result": result,
+            "Trigger Type": trigger_type,
+            "Triggered By": trigger_user
+        })
 
-    except Exception as e:
-        print("Error processing job:", job_name)
-
-    return job_records
-
-
-# --------------------------------------------------
-# MULTITHREADING EXECUTION
-# --------------------------------------------------
-
-print("Scanning Jenkins using", MAX_WORKERS, "workers...")
-
-with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-
-    futures = [executor.submit(process_job, job) for job in jobs]
-
-    for future in as_completed(futures):
-        records.extend(future.result())
-
-# --------------------------------------------------
-# SAVE RESULTS
-# --------------------------------------------------
+# ---------------------------------------
+# SAVE EXCEL
+# ---------------------------------------
 
 df = pd.DataFrame(records)
 
@@ -170,7 +146,7 @@ file_path = os.path.join(os.getcwd(), OUTPUT_FILE)
 
 df.to_excel(file_path, index=False)
 
-print("--------------------------------------")
+print("------------------------------------")
 print("Excel saved:", file_path)
 print("Total builds:", len(df))
-print("--------------------------------------")
+print("------------------------------------")
