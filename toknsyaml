@@ -3,118 +3,130 @@ import pandas as pd
 import datetime
 import os
 
-# -------------------------------
+# ---------------------------------
 # CONFIGURATION
-# -------------------------------
+# ---------------------------------
 
 JENKINS_URL = "https://your-jenkins-url"
 USERNAME = "your_username"
 API_TOKEN = "your_api_token"
 
-API_ENDPOINT = "/api/json?tree=jobs[name,builds[number,url,timestamp,result,actions[causes[*]]]]"
+OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
 
-OUTPUT_FILE = "jenkins_builds_last_8_hours.xlsx"
-
-# -------------------------------
+# ---------------------------------
 # TIME WINDOW
-# -------------------------------
+# ---------------------------------
 
 now = datetime.datetime.utcnow()
 eight_hours_ago = now - datetime.timedelta(hours=8)
-
 eight_hours_epoch = int(eight_hours_ago.timestamp() * 1000)
-
-# -------------------------------
-# FETCH DATA
-# -------------------------------
-
-url = JENKINS_URL + API_ENDPOINT
-
-print("Fetching Jenkins builds...")
-
-response = requests.get(url, auth=(USERNAME, API_TOKEN))
-
-if response.status_code != 200:
-    print("Error connecting to Jenkins:", response.status_code)
-    exit()
-
-data = response.json()
 
 records = []
 
-# -------------------------------
-# PROCESS JOBS AND BUILDS
-# -------------------------------
+# ---------------------------------
+# STEP 1 — GET JOB LIST
+# ---------------------------------
 
-for job in data.get("jobs", []):
+print("Fetching Jenkins jobs...")
 
-    job_name = job.get("name")
+jobs_api = f"{JENKINS_URL}/api/json?tree=jobs[name]"
 
-    for build in job.get("builds", []):
+response = requests.get(jobs_api, auth=(USERNAME, API_TOKEN))
+
+if response.status_code != 200:
+    print("Error fetching jobs")
+    exit()
+
+jobs = response.json().get("jobs", [])
+
+print("Total Jobs:", len(jobs))
+
+# ---------------------------------
+# STEP 2 — FETCH BUILDS PER JOB
+# ---------------------------------
+
+for job in jobs:
+
+    job_name = job["name"]
+
+    print("Processing job:", job_name)
+
+    job_api = f"{JENKINS_URL}/job/{job_name}/api/json?tree=builds[number,url,timestamp,result,actions[causes[*]]]"
+
+    r = requests.get(job_api, auth=(USERNAME, API_TOKEN))
+
+    if r.status_code != 200:
+        continue
+
+    job_data = r.json()
+
+    builds = job_data.get("builds", [])
+
+    for build in builds:
 
         timestamp = build.get("timestamp")
 
         if not timestamp:
             continue
 
-        if timestamp >= eight_hours_epoch:
+        if timestamp < eight_hours_epoch:
+            continue
 
-            build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
+        build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
 
-            build_number = build.get("number")
-            build_url = build.get("url")
-            result = build.get("result")
+        build_number = build.get("number")
+        build_url = build.get("url")
+        result = build.get("result")
 
-            trigger_type = ""
-            trigger_user = ""
+        trigger_type = ""
+        trigger_user = ""
 
-            actions = build.get("actions", [])
+        actions = build.get("actions", [])
 
-            for action in actions:
+        for action in actions:
 
-                causes = action.get("causes")
+            causes = action.get("causes")
 
-                if causes:
+            if causes:
 
-                    for cause in causes:
+                for cause in causes:
 
-                        if "userName" in cause:
-                            trigger_type = "User Trigger"
-                            trigger_user = cause.get("userName")
+                    if "userName" in cause:
+                        trigger_type = "USER"
+                        trigger_user = cause.get("userName")
 
-                        elif "shortDescription" in cause:
-                            trigger_type = cause.get("shortDescription")
+                    elif "shortDescription" in cause:
+                        trigger_type = cause.get("shortDescription")
 
-            records.append({
-                "Job Name": job_name,
-                "Build Number": build_number,
-                "Build URL": build_url,
-                "Build Time": build_time,
-                "Result": result,
-                "Trigger Type": trigger_type,
-                "Triggered By": trigger_user
-            })
+        records.append({
+            "Job Name": job_name,
+            "Build Number": build_number,
+            "Build URL": build_url,
+            "Build Time": build_time,
+            "Result": result,
+            "Trigger Type": trigger_type,
+            "Triggered By": trigger_user
+        })
 
-# -------------------------------
+# ---------------------------------
 # CREATE DATAFRAME
-# -------------------------------
+# ---------------------------------
 
 df = pd.DataFrame(records)
 
 if not df.empty:
     df = df.sort_values(by="Build Time", ascending=False)
 
-# -------------------------------
-# SAVE EXCEL IN CURRENT FOLDER
-# -------------------------------
+# ---------------------------------
+# SAVE EXCEL
+# ---------------------------------
 
 current_dir = os.getcwd()
 file_path = os.path.join(current_dir, OUTPUT_FILE)
 
 df.to_excel(file_path, index=False)
 
-print("--------------------------------------------------")
-print("Excel file created successfully")
-print("File location:", file_path)
+print("------------------------------------------------")
+print("Excel file saved:", file_path)
 print("Total builds found:", len(df))
-print("--------------------------------------------------")
+print("------------------------------------------------")
