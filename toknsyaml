@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 import datetime
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ---------------------------------
 # CONFIGURATION
@@ -11,6 +12,7 @@ JENKINS_URL = "https://your-jenkins-url"
 USERNAME = "your_username"
 API_TOKEN = "your_api_token"
 
+MAX_WORKERS = 20
 OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
 
 # ---------------------------------
@@ -23,15 +25,18 @@ eight_hours_epoch = int(eight_hours_ago.timestamp() * 1000)
 
 records = []
 
+session = requests.Session()
+session.auth = (USERNAME, API_TOKEN)
+
 # ---------------------------------
-# STEP 1 — GET JOB LIST
+# FETCH JOB LIST
 # ---------------------------------
 
 print("Fetching Jenkins jobs...")
 
 jobs_api = f"{JENKINS_URL}/api/json?tree=jobs[name]"
 
-response = requests.get(jobs_api, auth=(USERNAME, API_TOKEN))
+response = session.get(jobs_api)
 
 if response.status_code != 200:
     print("Error fetching jobs")
@@ -39,74 +44,92 @@ if response.status_code != 200:
 
 jobs = response.json().get("jobs", [])
 
-print("Total Jobs:", len(jobs))
+print("Total jobs found:", len(jobs))
+
 
 # ---------------------------------
-# STEP 2 — FETCH BUILDS PER JOB
+# FUNCTION TO PROCESS EACH JOB
 # ---------------------------------
 
-for job in jobs:
+def fetch_job_builds(job):
 
     job_name = job["name"]
-
-    print("Processing job:", job_name)
+    job_records = []
 
     job_api = f"{JENKINS_URL}/job/{job_name}/api/json?tree=builds[number,url,timestamp,result,actions[causes[*]]]"
 
-    r = requests.get(job_api, auth=(USERNAME, API_TOKEN))
+    try:
+        r = session.get(job_api, timeout=30)
 
-    if r.status_code != 200:
-        continue
+        if r.status_code != 200:
+            return []
 
-    job_data = r.json()
+        builds = r.json().get("builds", [])
 
-    builds = job_data.get("builds", [])
+        for build in builds:
 
-    for build in builds:
+            timestamp = build.get("timestamp")
 
-        timestamp = build.get("timestamp")
+            if not timestamp:
+                continue
 
-        if not timestamp:
-            continue
+            if timestamp < eight_hours_epoch:
+                continue
 
-        if timestamp < eight_hours_epoch:
-            continue
+            build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
 
-        build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
+            build_number = build.get("number")
+            build_url = build.get("url")
+            result = build.get("result")
 
-        build_number = build.get("number")
-        build_url = build.get("url")
-        result = build.get("result")
+            trigger_type = ""
+            trigger_user = ""
 
-        trigger_type = ""
-        trigger_user = ""
+            actions = build.get("actions", [])
 
-        actions = build.get("actions", [])
+            for action in actions:
 
-        for action in actions:
+                causes = action.get("causes")
 
-            causes = action.get("causes")
+                if causes:
 
-            if causes:
+                    for cause in causes:
 
-                for cause in causes:
+                        if "userName" in cause:
+                            trigger_type = "USER"
+                            trigger_user = cause.get("userName")
 
-                    if "userName" in cause:
-                        trigger_type = "USER"
-                        trigger_user = cause.get("userName")
+                        elif "shortDescription" in cause:
+                            trigger_type = cause.get("shortDescription")
 
-                    elif "shortDescription" in cause:
-                        trigger_type = cause.get("shortDescription")
+            job_records.append({
+                "Job Name": job_name,
+                "Build Number": build_number,
+                "Build URL": build_url,
+                "Build Time": build_time,
+                "Result": result,
+                "Trigger Type": trigger_type,
+                "Triggered By": trigger_user
+            })
 
-        records.append({
-            "Job Name": job_name,
-            "Build Number": build_number,
-            "Build URL": build_url,
-            "Build Time": build_time,
-            "Result": result,
-            "Trigger Type": trigger_type,
-            "Triggered By": trigger_user
-        })
+    except Exception as e:
+        print("Error processing job:", job_name)
+
+    return job_records
+
+
+# ---------------------------------
+# PARALLEL EXECUTION
+# ---------------------------------
+
+print("Scanning builds using", MAX_WORKERS, "workers...")
+
+with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+
+    futures = [executor.submit(fetch_job_builds, job) for job in jobs]
+
+    for future in as_completed(futures):
+        records.extend(future.result())
 
 # ---------------------------------
 # CREATE DATAFRAME
@@ -126,7 +149,7 @@ file_path = os.path.join(current_dir, OUTPUT_FILE)
 
 df.to_excel(file_path, index=False)
 
-print("------------------------------------------------")
-print("Excel file saved:", file_path)
+print("----------------------------------------")
+print("Excel saved:", file_path)
 print("Total builds found:", len(df))
-print("------------------------------------------------")
+print("----------------------------------------")
