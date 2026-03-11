@@ -4,9 +4,9 @@ import datetime
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ---------------------------------
+# ---------------------------
 # CONFIGURATION
-# ---------------------------------
+# ---------------------------
 
 JENKINS_URL = "https://your-jenkins-url"
 USERNAME = "your_username"
@@ -15,9 +15,9 @@ API_TOKEN = "your_api_token"
 MAX_WORKERS = 20
 OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
 
-# ---------------------------------
-# TIME WINDOW
-# ---------------------------------
+# ---------------------------
+# TIME FILTER
+# ---------------------------
 
 now = datetime.datetime.utcnow()
 eight_hours_ago = now - datetime.timedelta(hours=8)
@@ -28,37 +28,41 @@ records = []
 session = requests.Session()
 session.auth = (USERNAME, API_TOKEN)
 
-# ---------------------------------
-# FETCH JOB LIST
-# ---------------------------------
+# ---------------------------
+# STEP 1 – GET JOB LIST
+# ---------------------------
 
-print("Fetching Jenkins jobs...")
+print("Fetching Jenkins job list...")
 
 jobs_api = f"{JENKINS_URL}/api/json?tree=jobs[name]"
 
 response = session.get(jobs_api)
 
 if response.status_code != 200:
-    print("Error fetching jobs")
+    print("Failed to fetch job list")
     exit()
 
 jobs = response.json().get("jobs", [])
 
-print("Total jobs found:", len(jobs))
+print("Total jobs:", len(jobs))
 
 
-# ---------------------------------
-# FUNCTION TO PROCESS EACH JOB
-# ---------------------------------
+# ---------------------------
+# STEP 2 – FETCH BUILDS
+# ---------------------------
 
-def fetch_job_builds(job):
+def process_job(job):
 
     job_name = job["name"]
     job_records = []
 
-    job_api = f"{JENKINS_URL}/job/{job_name}/api/json?tree=builds[number,url,timestamp,result,actions[causes[*]]]"
+    job_api = (
+        f"{JENKINS_URL}/job/{job_name}/api/json"
+        "?tree=builds[number,url,timestamp,result,actions[causes[userName,shortDescription]]]"
+    )
 
     try:
+
         r = session.get(job_api, timeout=30)
 
         if r.status_code != 200:
@@ -78,10 +82,6 @@ def fetch_job_builds(job):
 
             build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
 
-            build_number = build.get("number")
-            build_url = build.get("url")
-            result = build.get("result")
-
             trigger_type = ""
             trigger_user = ""
 
@@ -95,61 +95,60 @@ def fetch_job_builds(job):
 
                     for cause in causes:
 
-                        if "userName" in cause:
-                            trigger_type = "USER"
+                        if cause.get("userName"):
                             trigger_user = cause.get("userName")
+                            trigger_type = "USER"
 
-                        elif "shortDescription" in cause:
+                        elif cause.get("shortDescription"):
                             trigger_type = cause.get("shortDescription")
 
             job_records.append({
                 "Job Name": job_name,
-                "Build Number": build_number,
-                "Build URL": build_url,
+                "Build Number": build.get("number"),
+                "Build URL": build.get("url"),
                 "Build Time": build_time,
-                "Result": result,
+                "Result": build.get("result"),
                 "Trigger Type": trigger_type,
                 "Triggered By": trigger_user
             })
 
-    except Exception as e:
-        print("Error processing job:", job_name)
+    except Exception:
+        print("Error reading job:", job_name)
 
     return job_records
 
 
-# ---------------------------------
-# PARALLEL EXECUTION
-# ---------------------------------
+# ---------------------------
+# STEP 3 – PARALLEL FETCH
+# ---------------------------
 
-print("Scanning builds using", MAX_WORKERS, "workers...")
+print("Scanning builds with", MAX_WORKERS, "parallel workers...")
 
 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 
-    futures = [executor.submit(fetch_job_builds, job) for job in jobs]
+    futures = [executor.submit(process_job, job) for job in jobs]
 
     for future in as_completed(futures):
         records.extend(future.result())
 
-# ---------------------------------
+# ---------------------------
 # CREATE DATAFRAME
-# ---------------------------------
+# ---------------------------
 
 df = pd.DataFrame(records)
 
 if not df.empty:
     df = df.sort_values(by="Build Time", ascending=False)
 
-# ---------------------------------
+# ---------------------------
 # SAVE EXCEL
-# ---------------------------------
+# ---------------------------
 
-current_dir = os.getcwd()
-file_path = os.path.join(current_dir, OUTPUT_FILE)
+file_path = os.path.join(os.getcwd(), OUTPUT_FILE)
 
 df.to_excel(file_path, index=False)
 
-print("----------------------------------------")
-print("Excel saved:", file_path)
-print("Total builds found:", len(df))
-print("----------------------------------------")
+print("---------------------------------------")
+print("Excel file created:", file_path)
+print("Total builds:", len(df))
+print("---------------------------------------")
