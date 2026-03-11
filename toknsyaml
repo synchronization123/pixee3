@@ -4,9 +4,13 @@ import datetime
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# -----------------------------------
+# CONFIGURATION
+# -----------------------------------
+
 JENKINS_URL = "https://your-jenkins-url"
-USERNAME = "your_username"
-API_TOKEN = "your_api_token"
+USERNAME = "username"
+API_TOKEN = "api_token"
 
 MAX_WORKERS = 20
 OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
@@ -14,127 +18,129 @@ OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
 session = requests.Session()
 session.auth = (USERNAME, API_TOKEN)
 
+# -----------------------------------
+# TIME WINDOW
+# -----------------------------------
+
 now = datetime.datetime.utcnow()
 eight_hours_ago = now - datetime.timedelta(hours=8)
 eight_hours_epoch = int(eight_hours_ago.timestamp() * 1000)
 
-records = []
+# -----------------------------------
+# FETCH RECENT BUILDS ACROSS JENKINS
+# -----------------------------------
 
-# ------------------------------------------------
-# STEP 1 – FETCH JOBS
-# ------------------------------------------------
+print("Fetching Jenkins build metadata...")
 
-jobs_api = f"{JENKINS_URL}/api/json?tree=jobs[name]"
+api = f"{JENKINS_URL}/api/json?tree=jobs[name,builds[number,url,timestamp,result]{{,20}}]"
 
-jobs = session.get(jobs_api).json().get("jobs", [])
+data = session.get(api).json()
 
-print("Jobs found:", len(jobs))
+builds_to_scan = []
 
-
-# ------------------------------------------------
-# STEP 2 – PROCESS JOB
-# ------------------------------------------------
-
-def process_job(job):
+for job in data.get("jobs", []):
 
     job_name = job["name"]
-    job_records = []
 
-    builds_api = f"{JENKINS_URL}/job/{job_name}/api/json?tree=builds[number,url,timestamp,result]"
+    for build in job.get("builds", []):
 
-    r = session.get(builds_api)
+        ts = build.get("timestamp")
 
-    if r.status_code != 200:
-        return []
-
-    builds = r.json().get("builds", [])
-
-    for build in builds:
-
-        timestamp = build.get("timestamp")
-
-        if not timestamp:
+        if not ts:
             continue
 
-        if timestamp < eight_hours_epoch:
-            continue
+        if ts >= eight_hours_epoch:
 
-        build_url = build["url"]
+            builds_to_scan.append({
+                "job": job_name,
+                "number": build["number"],
+                "url": build["url"],
+                "timestamp": ts,
+                "result": build.get("result")
+            })
 
-        # -----------------------------------
-        # TRUE DEPTH 4 CALL
-        # -----------------------------------
+print("Recent builds detected:", len(builds_to_scan))
 
-        build_api = f"{build_url}api/json?tree=actions[causes[userName,shortDescription]]"
+# -----------------------------------
+# FUNCTION TO FETCH DEPTH 4 DATA
+# -----------------------------------
 
-        trigger_user = ""
-        trigger_type = ""
+def fetch_build_details(build):
 
-        try:
+    build_api = f"{build['url']}api/json?depth=4"
 
-            br = session.get(build_api)
+    trigger_user = ""
+    trigger_type = ""
 
-            actions = br.json().get("actions", [])
+    try:
 
-            for action in actions:
+        r = session.get(build_api)
 
-                causes = action.get("causes")
+        actions = r.json().get("actions", [])
 
-                if causes:
+        for action in actions:
 
-                    for cause in causes:
+            causes = action.get("causes")
 
-                        if cause.get("userName"):
-                            trigger_user = cause["userName"]
-                            trigger_type = "USER"
+            if causes:
 
-                        elif cause.get("shortDescription"):
-                            trigger_type = cause["shortDescription"]
+                for cause in causes:
 
-        except:
-            pass
+                    if cause.get("userName"):
+                        trigger_user = cause["userName"]
+                        trigger_type = "USER"
 
-        build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
+                    elif cause.get("shortDescription"):
+                        trigger_type = cause["shortDescription"]
 
-        job_records.append({
-            "Job Name": job_name,
-            "Build Number": build.get("number"),
-            "Build URL": build_url,
-            "Build Time": build_time,
-            "Result": build.get("result"),
-            "Trigger Type": trigger_type,
-            "Triggered By": trigger_user
-        })
+    except:
+        pass
 
-    return job_records
+    build_time = datetime.datetime.fromtimestamp(build["timestamp"] / 1000)
 
+    return {
+        "Job Name": build["job"],
+        "Build Number": build["number"],
+        "Build URL": build["url"],
+        "Build Time": build_time,
+        "Result": build["result"],
+        "Trigger Type": trigger_type,
+        "Triggered By": trigger_user
+    }
 
-# ------------------------------------------------
-# STEP 3 – PARALLEL EXECUTION
-# ------------------------------------------------
+# -----------------------------------
+# PARALLEL DEPTH FETCH
+# -----------------------------------
 
-print("Scanning builds with 20 workers...")
+records = []
+
+print("Fetching trigger information with 20 workers...")
 
 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 
-    futures = [executor.submit(process_job, job) for job in jobs]
+    futures = [executor.submit(fetch_build_details, b) for b in builds_to_scan]
 
     for future in as_completed(futures):
-        records.extend(future.result())
+        records.append(future.result())
 
-
-# ------------------------------------------------
-# SAVE EXCEL
-# ------------------------------------------------
+# -----------------------------------
+# CREATE DATAFRAME
+# -----------------------------------
 
 df = pd.DataFrame(records)
 
 if not df.empty:
     df = df.sort_values(by="Build Time", ascending=False)
 
+# -----------------------------------
+# SAVE EXCEL
+# -----------------------------------
+
 file_path = os.path.join(os.getcwd(), OUTPUT_FILE)
 
 df.to_excel(file_path, index=False)
 
+print("-------------------------------------")
 print("Excel saved:", file_path)
 print("Total builds:", len(df))
+print("-------------------------------------")
