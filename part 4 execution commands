@@ -1,0 +1,39 @@
+INSTRUCTION: Comprehensive Security Filter Discovery
+
+Given the Python application at [PROJECT_PATH], perform the following:
+
+1. SCAN PHASE
+   - Identify all files that contain security logic
+   - List all middleware definitions
+   - Find all decorator definitions
+   - Extract all configuration files
+   - Identify authentication/authorization modules
+
+2. ANALYSIS PHASE
+   - For each security control found:
+     * Document its location (file:line)
+     * Explain its purpose
+     * Map its coverage (which endpoints/functions it protects)
+     * Identify any exceptions or bypasses
+     * Note any dependencies
+
+3. MAPPING PHASE
+   - Create a request flow diagram
+   - Show which security checks apply to each route
+   - Identify the execution order
+   - Highlight any gaps in coverage
+
+4. REPORTING PHASE
+   - Generate a security controls inventory
+   - List all protected endpoints
+   - List all unprotected endpoints
+   - Provide recommendations for missing controls
+
+5. VALIDATION PHASE
+   - Cross-reference with OWASP Top 10
+   - Check for common security misconfigurations
+   - Verify security best practices
+   - Identify potential vulnerabilities
+
+OUTPUT: Detailed JSON report with all discovered security controls, their locations,
+coverage, and recommendations.
