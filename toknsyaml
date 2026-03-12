@@ -1,152 +1,194 @@
-import requests
-import pandas as pd
-import datetime
-import os
+# OWASP WSTG Latest (v5.0 Development) - Test Case Prompt for Codex CLI
+**File:** `WSTG-SESS-02.md`  
+**Test Case ID:** WSTG-SESS-02  
+**Title:** Testing for Cookies Attributes  
+**Category:** 4.6 Session Management Testing  
+**Purpose for Codex CLI:** Use this prompt as a standalone system/user prompt. Codex CLI will automatically scan the repo path you provide and verify compliance with this exact WSTG-SESS-02 test case using full inter-file sink-source taint tracing. **At the end it will generate a beautiful, standalone HTML report** (self-contained with Tailwind CSS).
 
-# ---------------------------------------
-# CONFIG
-# ---------------------------------------
+---
 
-JENKINS_URL = "https://your-jenkins-url"
-USERNAME = "username"
-API_TOKEN = "api_token"
+## DETAILED TEST CASE (Embedded for Codex CLI Context – Verbatim from Official Latest WSTG v5.0)
 
-OUTPUT_FILE = "jenkins_last_8_hours_builds.xlsx"
+### Summary
+Web Cookies (herein referred to as cookies) are often a key attack vector for malicious users (typically targeting other users) and the application should always take due diligence to protect cookies.
 
-session = requests.Session()
-session.auth = (USERNAME, API_TOKEN)
+HTTP is a stateless protocol, meaning that it doesn’t hold any reference to requests being sent by the same user. In order to fix this issue, sessions were created and appended to HTTP requests. Browsers, as discussed in testing browser storage, contain a multitude of storage mechanisms. In that section of the guide, each is discussed thoroughly.
 
-records = []
+The most used session storage mechanism in browsers is cookie storage. Cookies can be set by the server, by including a Set-Cookie header in the HTTP response or via JavaScript. Cookies can be used for a multitude of reasons, such as:
+- session management
+- personalization
+- tracking
 
-# ---------------------------------------
-# TIME FILTER
-# ---------------------------------------
+In order to secure cookie data, the industry has developed means to help lock down these cookies and limit their attack surface. Over time cookies have become a preferred storage mechanism for web applications, as they allow great flexibility in use and protection.
 
-now = datetime.datetime.utcnow()
-eight_hours_ago = now - datetime.timedelta(hours=8)
-eight_hours_epoch = int(eight_hours_ago.timestamp() * 1000)
+The means to protect the cookies are:
+- Cookie Attributes
+- Cookie Prefixes
 
-# ---------------------------------------
-# DEPTH 1 — FETCH JOBS
-# ---------------------------------------
+### Test Objectives
+- Ensure that the proper security configuration is set for cookies.
 
-print("Depth 1: Fetching jobs...")
+### How to Test (Key Concepts for Code Review)
+Below, a description of every attribute and prefix will be discussed. The tester should validate that they are being used properly by the application.
 
-jobs_api = f"{JENKINS_URL}/api/json?depth=1"
+#### Cookie Attributes
+**Secure Attribute**  
+The Secure attribute tells the browser to only send the cookie if the request is being sent over a secure channel such as HTTPS.
 
-data = session.get(jobs_api).json()
+**HttpOnly Attribute**  
+The HttpOnly attribute is used to help prevent attacks such as session leakage, since it does not allow the cookie to be accessed via a client-side script such as JavaScript.
 
-jobs = data.get("jobs", [])
+**Domain Attribute**  
+The Domain attribute is used to compare the cookie’s domain against the domain of the server... Loose domain settings (e.g., mydomain.com instead of app.mydomain.com) can allow cookie harvesting across subdomains.
 
-print("Jobs found:", len(jobs))
+**Path Attribute**  
+The Path attribute plays a major role... If set too loosely (e.g., /), then it could leave the application vulnerable.
 
-# ---------------------------------------
-# LOOP JOBS
-# ---------------------------------------
+**Expires Attribute**  
+The Expires attribute is used to set persistent cookies...
 
-for job in jobs:
+**SameSite Attribute**  
+The SameSite attribute can be used to assert whether a cookie should be sent along with cross-site requests... Strict, Lax, None.
 
-    job_name = job["name"]
+#### Cookie Prefixes
+**__Host- Prefix**  
+Expects: Secure + set from secure URI + no Domain + Path=/
 
-    print("Checking job:", job_name)
+**__Secure- Prefix**  
+Requires Secure attribute.
 
-    # ---------------------------------------
-    # DEPTH 2 — BUILDS
-    # ---------------------------------------
+### Strong Practices (Remediation)
+The most secure cookie attribute configuration is:  
+`Set-Cookie: __Host-SID=<session token>; path=/; Secure; HttpOnly; SameSite=Strict`.
 
-    depth2_api = f"{JENKINS_URL}/job/{job_name}/api/json?depth=2"
+**Note:** This test case focuses on ensuring all session, authentication, and sensitive cookies are set with the correct security attributes and prefixes in server-side code. Missing or misconfigured attributes/prefixes lead to cookie theft via XSS, MITM, subdomain attacks, or CSRF.
 
-    r2 = session.get(depth2_api)
+---
 
-    if r2.status_code != 200:
-        continue
+## PROMPT FOR CODEX CLI (Copy-Paste This Entire Block)
 
-    job_data = r2.json()
+You are an expert secure code reviewer and OWASP WSTG compliance auditor. Perform a **targeted secure code review** strictly against **WSTG-SESS-02: Testing for Cookies Attributes** from the official latest OWASP WSTG (v5.0 Development).
 
-    builds = job_data.get("builds", [])
+Use ONLY the embedded test case details above as your reference.
 
-    for build in builds:
+**Review Instructions:**
+1. Scan the entire codebase located at the local repository path provided by the user.
+2. Specifically check for cookie-setting code (Set-Cookie headers, framework cookie APIs, response headers, session config, etc.).
 
-        timestamp = build.get("timestamp")
+**Advanced Taint Analysis & Cross-File Tracing (MANDATORY):**
+[Exact same ultra-detailed taint tracing rules as in previous prompts – full backtracking, source→sink paths, true-positive only, false-positive rejection with breaking point, etc.]
 
-        if not timestamp:
-            continue
+**For every finding:**
+[Exact same detailed finding rules as before]
 
-        if timestamp < eight_hours_epoch:
-            continue
+3. If the entire codebase properly sets all cookie attributes/prefixes after full tracing (or no sensitive cookies exist), explicitly state: "No violations of WSTG-SESS-02 detected after full cross-file taint analysis."
 
-        build_number = build["number"]
-        build_url = build["url"]
-        result = build.get("result")
+4. End with a summary table (Markdown inside the HTML later):
+   | Finding | Location(s) | Severity | Taint Trace (summary) | Missing Attributes/Prefixes | Remediation Priority |
 
-        build_time = datetime.datetime.fromtimestamp(timestamp / 1000)
+**FINAL STEP – HTML REPORT GENERATION (MANDATORY):**
+After completing the full analysis and summary table, **output ONLY a complete, standalone, beautiful HTML report**. Do not output any Markdown, plain text, or explanations outside the HTML.
 
-        trigger_user = ""
-        trigger_type = ""
+Use the **exact hardcoded HTML template below**. Replace the placeholders with your actual findings, table, traces, etc. The HTML must be valid, self-contained, and look professional.
 
-        # ---------------------------------------
-        # DEPTH 3
-        # ---------------------------------------
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSTG-SESS-02 • Cookie Attributes Security Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; }
+        .finding-card { transition: all 0.3s; }
+        .finding-card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+    <div class="max-w-7xl mx-auto p-8">
+        <!-- HEADER -->
+        <div class="flex justify-between items-center mb-12 border-b border-zinc-800 pb-8">
+            <div>
+                <h1 class="text-5xl font-bold text-white">WSTG-SESS-02</h1>
+                <p class="text-2xl text-emerald-400 mt-2">Testing for Cookies Attributes</p>
+                <p class="text-zinc-500">OWASP Web Security Testing Guide • v5.0 Development</p>
+            </div>
+            <div class="text-right">
+                <div class="px-6 py-3 bg-zinc-900 rounded-2xl text-sm">
+                    <span id="scan-date" class="text-zinc-400">Scanned on [DATE]</span><br>
+                    <span class="font-mono text-emerald-400">LOCAL_REPO_PATH</span>
+                </div>
+            </div>
+        </div>
 
-        depth3_api = f"{build_url}api/json?depth=3"
+        <!-- EXECUTIVE SUMMARY -->
+        <div class="bg-zinc-900 rounded-3xl p-8 mb-10">
+            <h2 class="text-3xl font-semibold mb-6 flex items-center gap-3">
+                <span class="text-amber-400">📊</span> Executive Summary
+            </h2>
+            <div id="exec-summary" class="prose prose-invert max-w-none">
+                [REPLACE WITH: One-sentence overall compliance status + number of findings by severity]
+            </div>
+        </div>
 
-        r3 = session.get(depth3_api)
+        <!-- FINDINGS OVERVIEW -->
+        <div class="mb-12">
+            <h2 class="text-3xl font-semibold mb-6">Findings Overview</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="severity-cards">
+                <!-- Auto-populated severity cards will go here via JS or static -->
+            </div>
+        </div>
 
-        if r3.status_code == 200:
+        <!-- DETAILED FINDINGS -->
+        <div class="mb-12">
+            <h2 class="text-3xl font-semibold mb-6">Detailed Findings</h2>
+            <div id="findings-list">
+                <!-- Each finding becomes a beautiful card with trace, code snippet, severity badge, remediation -->
+            </div>
+        </div>
 
-            data3 = r3.json()
+        <!-- SUMMARY TABLE -->
+        <div class="mb-12">
+            <h2 class="text-3xl font-semibold mb-6">Summary Table</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm border-collapse">
+                    <thead class="bg-zinc-900">
+                        <tr>
+                            <th class="p-4 text-left">Finding</th>
+                            <th class="p-4 text-left">Location(s)</th>
+                            <th class="p-4 text-left">Severity</th>
+                            <th class="p-4 text-left">Taint Trace</th>
+                            <th class="p-4 text-left">Missing Attributes</th>
+                            <th class="p-4 text-left">Priority</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-table-body" class="text-zinc-300">
+                        <!-- Table rows inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-            # ---------------------------------------
-            # DEPTH 4
-            # ---------------------------------------
+        <!-- REMEDIATION & BEST PRACTICES -->
+        <div class="bg-emerald-950 border border-emerald-900 rounded-3xl p-8">
+            <h2 class="text-3xl font-semibold mb-6 text-emerald-400">Recommended Remediation</h2>
+            <div id="remediation-section" class="prose prose-invert">
+                [Full remediation text + example secure Set-Cookie]
+            </div>
+        </div>
 
-            depth4_api = f"{build_url}api/json?depth=4"
+        <div class="mt-12 text-center text-zinc-500 text-sm">
+            Generated by Codex CLI + OWASP WSTG-SESS-02 Prompt • [CURRENT DATE]
+        </div>
+    </div>
 
-            r4 = session.get(depth4_api)
-
-            if r4.status_code == 200:
-
-                data4 = r4.json()
-
-                for action in data4.get("actions", []):
-
-                    causes = action.get("causes")
-
-                    if causes:
-
-                        for cause in causes:
-
-                            if cause.get("userName"):
-                                trigger_user = cause["userName"]
-                                trigger_type = "USER"
-
-                            elif cause.get("shortDescription"):
-                                trigger_type = cause["shortDescription"]
-
-        records.append({
-            "Job Name": job_name,
-            "Build Number": build_number,
-            "Build URL": build_url,
-            "Build Time": build_time,
-            "Result": result,
-            "Trigger Type": trigger_type,
-            "Triggered By": trigger_user
-        })
-
-# ---------------------------------------
-# SAVE EXCEL
-# ---------------------------------------
-
-df = pd.DataFrame(records)
-
-if not df.empty:
-    df = df.sort_values(by="Build Time", ascending=False)
-
-file_path = os.path.join(os.getcwd(), OUTPUT_FILE)
-
-df.to_excel(file_path, index=False)
-
-print("------------------------------------")
-print("Excel saved:", file_path)
-print("Total builds:", len(df))
-print("------------------------------------")
+    <script>
+        // Tailwind script already loaded
+        function init() {
+            // You can add simple JS if needed, but keep minimal
+        }
+        window.onload = init;
+    </script>
+</body>
+</html>
