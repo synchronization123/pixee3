@@ -1,0 +1,53 @@
+Analyze this Flask application and identify:
+
+1. EXTENSION-BASED SECURITY
+   - Flask-Login configuration
+   - Flask-WTF CSRF protection
+   - Flask-Security setup
+   - Flask-Limiter configuration
+   - Flask-CORS configuration
+   - Flask-Talisman headers
+   - Flask-SQLAlchemy ORM usage
+
+2. MIDDLEWARE & BEFORE_REQUEST HOOKS
+   - All @app.before_request functions
+   - All @app.after_request functions
+   - Custom middleware classes
+   - Authentication logic in before_request
+   - Authorization checks
+   - Request validation
+
+3. DECORATORS
+   - @login_required usage
+   - @roles_required usage
+   - @permissions_required usage
+   - Custom security decorators
+   - Rate limiting decorators
+
+4. CONFIGURATION
+   - Session configuration
+   - Cookie security settings
+   - CORS settings
+   - Rate limiting settings
+   - Logging configuration
+   - Error handling configuration
+
+5. FORM & REQUEST VALIDATION
+   - WTForms usage
+   - Marshmallow schema validation
+   - Pydantic model validation
+   - Custom validators
+
+6. AUTHENTICATION SYSTEM
+   - User loader function
+   - Authentication mechanism (session/JWT/API key)
+   - Password hashing
+   - Token generation/validation
+
+7. DATABASE PROTECTION
+   - SQLAlchemy ORM usage
+   - Query parameterization
+   - Raw SQL query checks
+   - SQL injection prevention
+
+Map all security controls and their coverage across endpoints.
