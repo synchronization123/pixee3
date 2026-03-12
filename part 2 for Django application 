@@ -1,0 +1,57 @@
+Analyze this Django application and identify:
+
+1. MIDDLEWARE STACK
+   - List all middleware in settings.MIDDLEWARE
+   - Identify security-related middleware
+   - Note the execution order
+   - Document what each security middleware protects
+
+2. DJANGO BUILT-IN SECURITY
+   - CSRF protection status (middleware enabled?)
+   - SQL injection prevention (ORM usage vs raw SQL)
+   - XSS protection (template autoescape settings)
+   - Authentication middleware configuration
+   - Session security settings
+   - Password hashing configuration
+
+3. DECORATORS & CLASS-BASED VIEW MIXINS
+   - @login_required usage
+   - @permission_required usage
+   - @require_http_methods usage
+   - LoginRequiredMixin usage
+   - PermissionRequiredMixin usage
+   - Custom decorators
+
+4. SECURITY SETTINGS (settings.py)
+   - SECURE_SSL_REDIRECT
+   - SESSION_COOKIE_SECURE
+   - CSRF_COOKIE_SECURE
+   - SECURE_HSTS_SECONDS
+   - SECURE_HSTS_INCLUDE_SUBDOMAINS
+   - SECURE_BROWSER_XSS_FILTER
+   - SECURE_CONTENT_SECURITY_POLICY
+   - X_FRAME_OPTIONS
+   - ALLOWED_HOSTS
+   - DEBUG setting
+   - SECRET_KEY management
+
+5. AUTHENTICATION & AUTHORIZATION
+   - User authentication backend
+   - Permission system configuration
+   - Group-based access control
+   - Custom authentication classes
+   - Token authentication (if used)
+
+6. FORM & INPUT VALIDATION
+   - Django Forms usage
+   - Model validation
+   - Serializer validation (DRF)
+   - Custom validators
+
+7. QUERY PROTECTION
+   - Identify raw SQL queries
+   - Verify parameterized queries
+   - Check for ORM usage patterns
+   - Look for potential SQL injection points
+
+Output a comprehensive security architecture map showing all protections.
