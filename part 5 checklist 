@@ -1,0 +1,60 @@
+CENTRALIZED SECURITY CONTROLS CHECKLIST
+
+MIDDLEWARE LAYER
+□ Authentication middleware
+□ Authorization middleware
+□ Input validation middleware
+□ CSRF protection middleware
+□ CORS middleware
+□ Rate limiting middleware
+□ Security headers middleware
+□ Request logging middleware
+□ Error handling middleware
+□ Session management middleware
+
+DECORATOR LAYER
+□ @login_required or equivalent
+□ @permission_required or equivalent
+□ @rate_limit or equivalent
+□ @validate or equivalent
+□ @sanitize or equivalent
+□ @csrf_protect or equivalent
+□ Custom security decorators
+
+CONFIGURATION LAYER
+□ SSL/HTTPS enforcement
+□ Secure cookie settings
+□ HSTS configuration
+□ CSP headers
+□ CORS whitelist
+□ Rate limiting rules
+□ Session timeout
+□ Password hashing algorithm
+□ Secret key management
+□ DEBUG mode disabled
+
+FRAMEWORK LAYER
+□ ORM usage (prevents SQL injection)
+□ Template autoescape (prevents XSS)
+□ CSRF token validation
+□ Session management
+□ Built-in authentication
+□ Built-in authorization
+
+FUNCTION LAYER
+□ Input validation function
+□ Data sanitization function
+□ Authentication function
+□ Authorization function
+□ Password hashing function
+□ Token validation function
+□ Logging function
+
+COVERAGE ANALYSIS
+□ All endpoints protected
+□ All user inputs validated
+□ All outputs encoded
+□ All sensitive operations logged
+□ All errors handled securely
+□ All dependencies secure
+□ All configurations hardened
