@@ -1,0 +1,51 @@
+Analyze this FastAPI application and identify:
+
+1. DEPENDENCY INJECTION SECURITY
+   - All security dependencies (Depends())
+   - HTTPBearer, HTTPBasic implementations
+   - OAuth2PasswordBearer setup
+   - Custom dependency security functions
+   - Scope-based security
+
+2. MIDDLEWARE STACK
+   - All app.add_middleware() calls
+   - CORSMiddleware configuration
+   - TrustedHostMiddleware setup
+   - Custom middleware classes
+   - Authentication middleware
+   - Request validation middleware
+
+3. DECORATORS & ROUTE GUARDS
+   - Security parameter in route decorators
+   - Custom decorators
+   - Path parameter validation
+   - Query parameter validation
+   - Request body validation (Pydantic models)
+
+4. PYDANTIC MODELS
+   - Input validation models
+   - Field validators
+   - Custom validators
+   - Type checking
+   - Sanitization in models
+
+5. AUTHENTICATION & AUTHORIZATION
+   - JWT token validation
+   - OAuth2 implementation
+   - API key validation
+   - Permission checking
+   - Role-based access control
+
+6. EXCEPTION HANDLERS
+   - Global exception handlers
+   - Security exception handling
+   - Error message sanitization
+   - Sensitive data in errors
+
+7. CONFIGURATION
+   - CORS settings
+   - Rate limiting (SlowAPI)
+   - Logging configuration
+   - SSL/TLS settings
+
+Map security flow through dependency injection chain.
