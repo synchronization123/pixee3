@@ -1,0 +1,123 @@
+Below are two full, detailed prompts you can paste into Codex CLI (or other LLM runner) to implement the workflow you described. One prompt generates a project-specific protection.md by scanning the repo. The other performs a diff-only, security-focused PR review using protection.md as the authoritative whitelist. Both prompts are explicit about inputs, constraints, expected formatting, and required outputs.
+
+Paste each prompt as the model input when running Codex CLI; supply the indicated runtime inputs (repo path or diff text and protection.md content). Today's date: 2026-03-13.
+
+1) protection.md generation prompt (full)
+
+You are an assistant that generates a project-specific protection.md for a Python codebase by scanning the provided repository path. Input: a local filesystem path to the repository root (REPO_PATH). Output: a plain-text protection.md file that lists centralized protections, validators, decorators, helper functions, and other symbols found in the repository and maps each symbol to a short behavior description and a one-line validation hint. The output must be machine-parseable and human-readable. Save the resulting protection.md to REPO_PATH/security/protection.md (create directories if needed) and also print it to stdout.
+
+Constraints and rules:
+- Only inspect files under REPO_PATH; do not access the network.
+- Look for concrete symbols (exact function/class/decorator names and module paths). For each protection category below, search for common symbol patterns and record any matches; if none are found for a category, include a placeholder entry that states "No project symbol found — reviewer must Flag".
+- Use these protection categories (exact headings in protection.md): Input validation, Authentication, Authorization, SQL/ORM, Template/XSS, Command execution, File I/O/Path traversal, Serialization/Deserialization, Secrets, Cryptography, Logging, Rate limiting, CSRF, Concurrency/Transactions, SSRF/Network requests, Dependency usage, Error handling, Framework assumptions.
+- For each symbol found, output a single line entry using this format:
+  symbol_name (module_or_file_path) : BriefBehaviorHint — ValidationHint
+  Example:
+  pydantic.BaseModel (venv/lib/... or site-packages or mention module) : central request/response schema validation — Accepted if used at endpoint input parse
+- If multiple symbols map to the same protection category, list them each on their own line under that category.
+- For detection, use filename and content pattern matching. Prioritize these concrete patterns (but include others you see):
+  - Pydantic: "class .*BaseModel" or "from pydantic import BaseModel" or ".parse_obj("
+  - Marshmallow/DRF serializers: "class .*Schema", "from marshmallow import Schema", "serializers.".
+  - Django Forms: "from django import forms" or "Form(" or "is_valid("
+  - Auth decorators: "@login_required", "@permission_required", "@jwt_required", "@requires_auth"
+  - Auth objects: "request.user", "current_user", "g.user"
+  - SQL/ORM: "from django.db", "from sqlalchemy", ".filter(", ".execute(", "text(" with params
+  - Template/XSS: "jinja2", "autoescape", "mark_safe", "escape(", "render_template("
+  - Command: "subprocess.run(", "subprocess.Popen(", "shell=True", "os.system("
+  - Path: "pathlib", "os.path.join", ".resolve()", "secure_file", "send_from_directory"
+  - Serialization: "pickle.loads", "yaml.load", "json.loads"
+  - Secrets: "os.environ", "secrets.", "vault.", "key=", literal token strings (pattern 'AKIA|-----BEGIN')
+  - Crypto: "from cryptography", "hashlib.", "MD5", "ECB"
+  - Logging: "logger.", "logging."
+  - Rate limiting: "throttle", "ratelimit", "limit", decorators like "@throttle"
+  - CSRF: "csrf_exempt", "csrf_protect", "FlaskForm", "WTF_CSRF"
+  - Concurrency: "threading.Lock", "transaction.atomic", "with lock"
+  - SSRF/network: "requests.get(", "requests.post(", "httpx.", "urllib.request"
+  - Dependencies: new requirements files or setup.py changes (list requirements.txt, pyproject.toml)
+  - Error handling: "traceback.print_exc", "raise", "logging.exception"
+  - Framework assumptions: mention explicitly if you detect Django/Flask/FastAPI and any specific helper (e.g., Django ORM, Jinja2 autoescape)
+- For each category entry include either:
+  - Matched symbols: list symbol lines, or
+  - "No project symbol found — reviewer must Flag"
+- For each matched symbol, include a one-line validation hint that tells reviewers when to Accept vs Verify vs Flag. Use exactly one of these statuses in the hint: Accepted / Verify / Flag.
+- The protection.md file must begin with a short header showing generation date and REPO_PATH.
+
+Example protection.md structure (must follow this structure exactly):
+
+# protection.md
+Generated: 2026-03-13
+Repo: /absolute/path/to/repo
+
+## Input validation
+pydantic.BaseModel (module: pydantic) : central schema validation — Accepted (used in fastapi endpoints)
+validate_user_input (module: app.validators) : project validator function — Verify (ensure used at call site)
+NoProjectSymbolFound: No project symbol found — reviewer must Flag
+
+## Authentication
+@login_required (module: app.auth.decorators) : request login enforcement — Accepted
+request.user (module: django) : built-in user object — Accepted
+
+... (continue for all categories listed above) ...
+
+Write the protection.md file and print the exact file contents as the final output.
+
+2) prreviewer.md diff-only security review prompt (full)
+
+You are a security-focused reviewer for Python PR diffs. Input: (1) a unified diff/patch text for a single PR (DIFF_TEXT), and (2) the content of protection.md generated earlier (PROTECTION_MD). Output: a concise security review in plain text following the exact structure and constraints below. The review must be suitable to save as workspace/<project>/<repo>/security/reports/pr-<PR_ID>-security-review.md.
+
+Process and rules:
+- Only use DIFF_TEXT and PROTECTION_MD to make decisions. Do not access network or other repo files.
+- Analyze only changed lines and hunks in the DIFF_TEXT. Do not inspect unchanged code except when using symbol names from PROTECTION_MD to justify Accepted protections.
+- For each changed file/hunk, produce at most one finding. Overall across the PR, list at most 6 flagged issues. Prioritize highest severity.
+- For each finding produce this exact structured block (repeat per finding):
+
+Scope: file <path> : <smallest scope> 
+Categories: <comma-separated list from this set — auth, authz, input validation, SQL/DB, XSS/template, OS/command, path traversal, serialization, secrets, crypto, logging, rate limiting, CSRF, SSRF, dependency, concurrency, error handling, other>
+Risk: <Low|Medium|High>
+Why: <one-line dataflow: source → sink>
+Evidence: <exact diff line(s) or function name(s) as shown in DIFF_TEXT; include surrounding +/- indicators>
+Protection.md match: <ProtectionCategoryName> — <Accepted|Verify|Flag> (exact symbol if Accepted; one-line justification)
+Remediation:
+- Suggested code (code block with 1–3 lines; Python where applicable)
+- Required test or verification step (one short line)
+
+- If you mark any item Accepted, include the exact symbol from PROTECTION_MD that justifies the acceptance (e.g., pydantic.BaseModel, @login_required).
+- If you make an assumption because runtime config is unknown, state it in one short clause prefixed by "Assume:".
+- After listing findings (max 6), provide:
+Overall risk: <one-sentence summary risk>
+Decision: <Approve / Approve with minor fixes / Require changes / Block>
+
+Additional strict constraints:
+- Keep each finding concise; each block may be at most 8 lines (not counting the code block).
+- Evidence must be verbatim snippet lines from DIFF_TEXT (use the +/- lines).
+- If an issue requires code, show minimal remediation (1–3 lines). Use triple-backtick code blocks and label language as python.
+- Limit flagged items to the top 6 by severity; if you see more, note "Additional issues omitted: N" as one-line after findings.
+- Do not include external links or citations.
+
+Example finding (format must match):
+
+Scope: file app/views.py : function update_user
+Categories: input validation, authz
+Risk: High
+Why: request.json['email'] (untrusted) → User.objects.filter(...).update(...) (direct DB update)
+Evidence:
++  email = request.json.get('email')
++  User.objects.filter(id=uid).update(email=email)
+Protection.md match: Input validation — Verify (UserUpdateSchema exists in protection.md but not used here)
+Remediation:
+- Suggested code:
+```python
+data = UserUpdateSchema.parse_obj(request.json)
+```
+- Test: add unit test asserting invalid email returns 400
+
+Execution notes for Codex CLI:
+- Provide DIFF_TEXT as the model input when running this prompt; also paste PROTECTION_MD content before the DIFF_TEXT or supply it as a separate context block.
+- Ask the model to produce the final review only (no extra commentary).
+- Today's date: 2026-03-13.
+
+End of prompts.
+
+If you want, I can now:
+- Insert your repo-specific symbol names (auth decorators, validators) into the protection.md generation prompt so it prefers those matches, or
+- Convert these prompts to JSON payloads ready for Codex CLI. Which would you like?
