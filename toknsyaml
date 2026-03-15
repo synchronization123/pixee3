@@ -1,20 +1,9 @@
-# .codex/config.toml
-
-# 1. Prioritize your custom security agents
-project_doc_filenames = [".agents/python_agents.md", ".agents/dotnet_agents.md", "AGENTS.md"]
-
-# 2. Configure the Titanium-AI MCP Server
-[mcp_servers.titanium-ai]
-command = "npx"
-args = ["-y", "@titanium-ai/mcp-server-atlassian"]
-# Forward the tokens from your PC's environment to the MCP server
-env_vars = ["X_JIRA_USER_PAT", "X_BITBUCKET_USER_PAT"]
-
-# 3. Define specific Agent Roles for quick calling
-[agents.python-sec]
-config_file = ".agents/python_agents.md"
-description = "Python Security Auditor"
-
-[agents.dotnet-sec]
-config_file = ".agents/dotnet_agents.md"
-description = ".NET Security Auditor"
+---
+name: python-audit-os
+description: Python-specific CWE-78 audit using Titanium-AI tools.
+---
+### Workflow
+1. **Fetch Jira**: Call `get_jira_issue(issue_key={{jira_id}})` to get requirements.
+2. **Fetch Code**: Call `get_bitbucket_pr_diff()` to get the changed code.
+3. **Trace**: Search for Python sinks: `os.system`, `subprocess.run`.
+4. **Fix**: Suggest `shlex.quote()` for sanitization.
