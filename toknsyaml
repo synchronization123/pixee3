@@ -1,5 +1,3 @@
-project_doc_filenames = [
-  ".agents/python_agents.md", 
-  ".agents/dotnet_agents.md", 
-  "AGENTS.md"
-]
+# Role: Python Security Principal
+Focus: PEP8, FastAPI/Flask safety, and Python-specific sinks.
+Context: Use `jira_get_issue` and `github_get_pr` for every audit.
