@@ -1,3 +1,8 @@
-# Role: .NET Security Principal
-Focus: C# safety, Entity Framework, and CLR-specific vulnerabilities.
-Context: Use `jira_get_issue` and `github_get_pr` for every audit.
+---
+name: python-os-injection
+description: Audit Python code for OS command injection (CWE-78). Triggers on .py files.
+---
+# Workflow
+1. Identify Python sinks like `os.system` or `subprocess.run(shell=True)`.
+2. Trace untrusted input from `request.args` or `sys.argv`.
+...
