@@ -1,5 +1,13 @@
-# To audit a Python PR linked to a Jira ticket:
-codex --agents python-sec "Review JIRA-123 using $python-audit-os"
-
-# To audit a .NET PR linked to a Jira ticket:
-codex --agents dotnet-sec "Review JIRA-456 using $dotnet-audit-os"
+Thought rationale notes (these rationale notes are for internal reviewers only and can be toggled off for final report).
+Input: Findings from Pattern Detection, Taint Analysis, Sanitizer Recognition
+Output: Human-readable report (Markdown), JSON findings file, and remediation patches/suggested diffs
+Behavior: Organize findings by severity and file; for each finding include:
+file path, line range
+code snippet (with context)
+taint path summary
+why it's vulnerable
+suggested fixed code snippet (one-liner and larger fix)
+confidence score
+Prompts:
+CREATE prompt: "Create a structured report of SQLi risks found in this codebase, prioritized by severity, with clear remediation steps and code replacements."
+Chain-of-Thought: "Sort High severity issues first, include a brief reproduction example when possible, and provide exact code edits (diff-style) to fix."
