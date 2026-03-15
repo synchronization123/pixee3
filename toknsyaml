@@ -1,9 +1,9 @@
 ---
-name: python-audit-os
-description: Python-specific CWE-78 audit using Titanium-AI tools.
+name: dotnet-audit-os
+description: .NET-specific CWE-78 audit using Titanium-AI tools.
 ---
 ### Workflow
-1. **Fetch Jira**: Call `get_jira_issue(issue_key={{jira_id}})` to get requirements.
-2. **Fetch Code**: Call `get_bitbucket_pr_diff()` to get the changed code.
-3. **Trace**: Search for Python sinks: `os.system`, `subprocess.run`.
-4. **Fix**: Suggest `shlex.quote()` for sanitization.
+1. **Fetch Jira**: Call `get_jira_issue(issue_key={{jira_id}})` for context.
+2. **Fetch Code**: Call `get_bitbucket_pr_diff()` for the PR changes.
+3. **Trace**: Search for .NET sinks: `Process.Start`, `ProcessStartInfo`.
+4. **Fix**: Suggest using `ArgumentList` instead of string interpolation.
