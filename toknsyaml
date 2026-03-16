@@ -1,28 +1,23 @@
-Perform a comprehensive security review of the provided Python application code.
+Focus specifically on identifying SQL Injection vulnerabilities in Python code.
 
-Focus primarily on vulnerabilities introduced in the pull request changes.
+Look for situations where user-controlled data may influence SQL queries.
 
-Use the repository context to trace how variables and functions interact across files.
+Typical cases include:
 
-During the review:
+- dynamically constructed SQL queries
+- string concatenation inside queries
+- f-strings used in SQL statements
+- format() used with SQL
 
-1. Identify user-controlled inputs.
-2. Identify dangerous operations where those inputs may be used.
-3. Determine if validation or sanitization is present.
-4. Trace data flows across functions, modules, and repository files.
-5. Identify potential vulnerabilities introduced by the pull request.
+Analyze database operations carefully.
 
-Focus on realistic exploitability.
+Determine:
 
-If a vulnerability is identified, provide:
+1. where user input enters the system
+2. how it propagates through variables
+3. whether it reaches SQL query execution
+4. whether parameterized queries are used
 
-- vulnerability type
-- affected file
-- vulnerable code snippet
-- source of input
-- dangerous operation
-- explanation of the data flow
-- possible exploitation scenario
-- severity assessment
+Use repository context to trace flows across files and functions.
 
-If no vulnerabilities are introduced by the pull request, clearly state that.
+Report only realistic SQL injection vulnerabilities introduced in the pull request.
