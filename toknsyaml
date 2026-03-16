@@ -1,23 +1,16 @@
-Focus specifically on identifying SQL Injection vulnerabilities in Python code.
+Focus on identifying Cross-Site Scripting vulnerabilities in Python web applications.
 
-Look for situations where user-controlled data may influence SQL queries.
+Pay attention to how user input is rendered into HTML responses.
 
-Typical cases include:
+Typical risk areas include:
 
-- dynamically constructed SQL queries
-- string concatenation inside queries
-- f-strings used in SQL statements
-- format() used with SQL
+- template rendering
+- dynamic HTML generation
+- string formatting inside HTML
+- unsafe template rendering
 
-Analyze database operations carefully.
+Trace user input through the code and determine whether it reaches HTML output without proper escaping.
 
-Determine:
+Use repository context to determine whether templating engines or escaping mechanisms are used.
 
-1. where user input enters the system
-2. how it propagates through variables
-3. whether it reaches SQL query execution
-4. whether parameterized queries are used
-
-Use repository context to trace flows across files and functions.
-
-Report only realistic SQL injection vulnerabilities introduced in the pull request.
+Report potential XSS vulnerabilities introduced by the pull request.
