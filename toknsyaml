@@ -1,16 +1,29 @@
-Focus on identifying Cross-Site Scripting vulnerabilities in Python web applications.
+You are controlling Chrome via DevTools MCP. Your ONLY task is to log into the CRM.COM application.
 
-Pay attention to how user input is rendered into HTML responses.
+Start here: https://app.crm.com/
 
-Typical risk areas include:
+Credentials (replace with your real ones right now):
+- Email: YOUR_EMAIL_HERE
+- Password: YOUR_PASSWORD_HERE
 
-- template rendering
-- dynamic HTML generation
-- string formatting inside HTML
-- unsafe template rendering
+Use these tools only as needed:
+- navigate_page
+- new_page (isolatedContext=true)
+- wait_for
+- fill_form or type_text
+- click
+- evaluate_script (only if the form needs inspection)
 
-Trace user input through the code and determine whether it reaches HTML output without proper escaping.
+Do this and nothing else:
+1. Go to https://app.crm.com/
+2. Enter the Email and click Sign in / Next
+3. On the next screen, enter the Password and click Sign in
+4. Stop as soon as you are inside the app (URL changes to dashboard or you see logged-in content).
 
-Use repository context to determine whether templating engines or escaping mechanisms are used.
+When login is complete, reply only with:  
+LOGIN SUCCESSFUL
 
-Report potential XSS vulnerabilities introduced by the pull request.
+If it fails, reply only with:  
+LOGIN FAILED: [short reason]
+
+Begin now.
