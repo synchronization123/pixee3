@@ -1,29 +1,95 @@
-You are controlling Chrome via DevTools MCP. Your ONLY task is to log into the CRM.COM application.
+import sqlite3
 
-Start here: https://app.crm.com/
+# =============================================
+# SQL INJECTION DEMO in Python (Educational Only)
+# =============================================
+# This is a **vulnerable** demo using raw string concatenation.
+# NEVER use this pattern in real applications.
+# 
+# Run this script once → it creates demo.db and sample users.
+# Then try normal login + SQL injection attack.
+# 
+# To fix it, see the "SECURE VERSION" at the bottom.
 
-Credentials (replace with your real ones right now):
-- Email: YOUR_EMAIL_HERE
-- Password: YOUR_PASSWORD_HERE
+# ------------------- SETUP DATABASE -------------------
+conn = sqlite3.connect('demo.db')
+c = conn.cursor()
 
-Use these tools only as needed:
-- navigate_page
-- new_page (isolatedContext=true)
-- wait_for
-- fill_form or type_text
-- click
-- evaluate_script (only if the form needs inspection)
+# Create table
+c.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        password TEXT
+    )
+''')
 
-Do this and nothing else:
-1. Go to https://app.crm.com/
-2. Enter the Email and click Sign in / Next
-3. On the next screen, enter the Password and click Sign in
-4. Stop as soon as you are inside the app (URL changes to dashboard or you see logged-in content).
+# Insert demo users (only once)
+c.execute("INSERT OR IGNORE INTO users VALUES ('admin', 'secret123')")
+c.execute("INSERT OR IGNORE INTO users VALUES ('user', 'pass123')")
+conn.commit()
 
-When login is complete, reply only with:  
-LOGIN SUCCESSFUL
+print("✅ Database 'demo.db' ready with users: admin / user\n")
 
-If it fails, reply only with:  
-LOGIN FAILED: [short reason]
+# ------------------- VULNERABLE LOGIN FUNCTION -------------------
+def vulnerable_login(username: str, password: str):
+    # DANGEROUS: direct string formatting (SQL Injection possible)
+    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    print(f"🔍 Executing query: {query}")  # For demo visibility
+    
+    try:
+        c.execute(query)
+        result = c.fetchone()
+        return result is not None
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
-Begin now.
+# ------------------- DEMO -------------------
+print("="*60)
+print("🔴 VULNERABLE DEMO")
+print("="*60)
+
+# Normal login (should work)
+if vulnerable_login("admin", "secret123"):
+    print("✅ Normal login SUCCESS as admin")
+else:
+    print("❌ Normal login failed")
+
+print("-" * 40)
+
+# SQL Injection attack (classic bypass)
+malicious_username = "admin' OR '1'='1' -- "
+malicious_password = ""   # empty password!
+
+if vulnerable_login(malicious_username, malicious_password):
+    print("🎉 SQL INJECTION SUCCESS! Logged in as admin WITHOUT password!")
+    print("   (The query became: WHERE username = 'admin' OR '1'='1' -- ' AND password = '')")
+else:
+    print("❌ SQLi failed (should not happen)")
+
+print("\n" + "="*60)
+print("💡 Try these other injections yourself:")
+print("   Username: admin' --")
+print("   Username: ' OR '1'='1")
+print("   Username: admin\"; DROP TABLE users; --")
+print("="*60)
+
+# ------------------- SECURE VERSION (How to fix it) -------------------
+print("\n\n🔒 SECURE VERSION (use this instead)")
+
+def secure_login(username: str, password: str):
+    # ✅ Parameterized query - SQL Injection impossible
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    print(f"🔍 Secure query: {query} with parameters")
+    
+    c.execute(query, (username, password))
+    return c.fetchone() is not None
+
+# Test secure version with same malicious input
+if secure_login(malicious_username, malicious_password):
+    print("✅ Secure login (even with malicious input)")
+else:
+    print("❌ Secure login correctly rejected the attack!")
+
+# Cleanup (optional)
+# conn.close()
