@@ -1,22 +1,4 @@
-WSTG_TEST_CASE: WSTG-INPVAL-01 - SQL Injection Testing
-
-FOCUS:
-Detect SQL Injection vulnerabilities by analyzing how user input is used in database queries.
-
-ADDITIONAL INSTRUCTIONS:
-
-- Specifically look for:
-  - string concatenation in SQL queries
-  - unsafe ORM usage
-  - lack of parameterized queries
-- Identify DB interaction points
-- Check if inputs reach queries without sanitization
-
-- Generate payload examples like:
-  - ' OR 1=1 --
-  - UNION SELECT ...
-  - time-based payloads
-
-- Evaluate exploitability realistically
-
-Follow all standard steps from the master prompt.
+1. Python script prepares context
+2. Inject WSTG prompt
+3. Codex CLI runs analysis
+4. Output JSON
