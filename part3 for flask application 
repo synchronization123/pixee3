@@ -1,53 +1,242 @@
-Analyze this Flask application and identify:
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import customtkinter as ctk
+from customtkinter import CTkImage
+import subprocess
+import json
+import os
+import tempfile
+import shutil
+from datetime import datetime
+from pptx import Presentation
+import win32com.client  # for real thumbnails
+from PIL import Image
+from tkinterdnd2 import DND_FILES, TkinterDnD  # drag & drop
 
-1. EXTENSION-BASED SECURITY
-   - Flask-Login configuration
-   - Flask-WTF CSRF protection
-   - Flask-Security setup
-   - Flask-Limiter configuration
-   - Flask-CORS configuration
-   - Flask-Talisman headers
-   - Flask-SQLAlchemy ORM usage
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
 
-2. MIDDLEWARE & BEFORE_REQUEST HOOKS
-   - All @app.before_request functions
-   - All @app.after_request functions
-   - Custom middleware classes
-   - Authentication logic in before_request
-   - Authorization checks
-   - Request validation
+class PPTXCodexDesigner(ctk.CTk, TkinterDnD.DnD):
+    def __init__(self):
+        super().__init__()
+        self.title("PPTX Codex Designer – AI Slide Suggestions + Thumbnails")
+        self.geometry("1400x900")
+        
+        self.pptx_path = None
+        self.workspace = None
+        self.thumbnail_folder = None
+        
+        self.create_widgets()
+        self.drop_target_register(DND_FILES)
+        self.dnd_bind('<<Drop>>', self.on_drop)
+    
+    def create_widgets(self):
+        # Header
+        title = ctk.CTkLabel(self, text="PPTX Codex Designer", font=ctk.CTkFont(size=28, weight="bold"))
+        title.pack(pady=15)
+        
+        # Top bar
+        top_frame = ctk.CTkFrame(self)
+        top_frame.pack(fill="x", padx=20, pady=10)
+        
+        self.browse_btn = ctk.CTkButton(top_frame, text="📁 Browse .pptx", command=self.browse_pptx, width=200)
+        self.browse_btn.pack(side="left", padx=10)
+        
+        self.excel_btn = ctk.CTkButton(top_frame, text="📊 Import Excel Data", command=self.import_excel, width=200)
+        self.excel_btn.pack(side="left", padx=10)
+        
+        self.file_label = ctk.CTkLabel(top_frame, text="No file selected", text_color="gray")
+        self.file_label.pack(side="left", padx=20)
+        
+        # Main area split: Thumbnails | Controls
+        main_pane = ctk.CTkPanedWindow(self, orientation="horizontal")
+        main_pane.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # LEFT: Thumbnails
+        thumb_frame = ctk.CTkFrame(main_pane)
+        main_pane.add(thumb_frame, weight=1)
+        ctk.CTkLabel(thumb_frame, text="Slide Thumbnails", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=8)
+        
+        self.thumb_scroll = ctk.CTkScrollableFrame(thumb_frame, width=380)
+        self.thumb_scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # RIGHT: Content + Controls
+        right_frame = ctk.CTkFrame(main_pane)
+        main_pane.add(right_frame, weight=2)
+        
+        ctk.CTkLabel(right_frame, text="Extracted Content Preview").pack(anchor="w", padx=15, pady=(10,5))
+        self.preview_text = ctk.CTkTextbox(right_frame, height=180)
+        self.preview_text.pack(fill="x", padx=15, pady=5)
+        
+        ctk.CTkLabel(right_frame, text="Instructions for Codex").pack(anchor="w", padx=15, pady=(15,5))
+        self.prompt_entry = ctk.CTkTextbox(right_frame, height=110)
+        self.prompt_entry.pack(fill="x", padx=15, pady=5)
+        self.prompt_entry.insert("1.0", "Analyze the slides and thumbnails. Suggest modern professional designs, color palette, fonts, icons, animations, and layout improvements. Also generate a ready-to-run python-pptx script that applies everything and saves as improved_presentation.pptx.")
+        
+        # Buttons
+        btn_frame = ctk.CTkFrame(right_frame)
+        btn_frame.pack(pady=15)
+        
+        self.analyze_btn = ctk.CTkButton(btn_frame, text="🚀 Ask Codex for Designs", 
+                                        command=self.ask_codex, width=280, height=45, state="disabled", font=ctk.CTkFont(size=14))
+        self.analyze_btn.pack(side="left", padx=8)
+        
+        self.apply_btn = ctk.CTkButton(btn_frame, text="✨ Apply Suggested Design", 
+                                      command=self.apply_design, width=280, height=45, state="disabled", font=ctk.CTkFont(size=14))
+        self.apply_btn.pack(side="left", padx=8)
+        
+        # Results
+        ctk.CTkLabel(right_frame, text="Codex Response & Code").pack(anchor="w", padx=15, pady=(20,5))
+        self.result_text = ctk.CTkTextbox(right_frame, height=280)
+        self.result_text.pack(fill="both", expand=True, padx=15, pady=5)
+    
+    def on_drop(self, event):
+        # Drag & drop handler
+        file_path = event.data.strip('{}')
+        if file_path.lower().endswith('.pptx'):
+            self.pptx_path = file_path
+            self.file_label.configure(text=f"Selected: {os.path.basename(self.pptx_path)}")
+            self.extract_content()
+            self.analyze_btn.configure(state="normal")
+        else:
+            messagebox.showwarning("Invalid file", "Please drop a .pptx file")
+    
+    def browse_pptx(self):
+        path = filedialog.askopenfilename(filetypes=[("PowerPoint", "*.pptx")])
+        if path:
+            self.pptx_path = path
+            self.file_label.configure(text=f"Selected: {os.path.basename(self.pptx_path)}")
+            self.extract_content()
+            self.analyze_btn.configure(state="normal")
+    
+    def extract_content(self):
+        try:
+            prs = Presentation(self.pptx_path)
+            content = []
+            for i, slide in enumerate(prs.slides, 1):
+                texts = [shape.text.strip() for shape in slide.shapes if hasattr(shape, "text") and shape.text.strip()]
+                content.append(f"Slide {i}: {' | '.join(texts[:4])}...")
+            
+            self.preview_text.delete("1.0", tk.END)
+            self.preview_text.insert(tk.END, "\n".join(content))
+            
+            # Workspace
+            self.workspace = tempfile.mkdtemp(prefix="codex_pptx_")
+            shutil.copy(self.pptx_path, os.path.join(self.workspace, "presentation.pptx"))
+            self.thumbnail_folder = os.path.join(self.workspace, "thumbnails")
+            os.makedirs(self.thumbnail_folder, exist_ok=True)
+            
+            # Save content for Codex
+            with open(os.path.join(self.workspace, "slides_content.md"), "w", encoding="utf-8") as f:
+                f.write(f"# PowerPoint Analysis\n**File:** {os.path.basename(self.pptx_path)}\n**Slides:** {len(prs.slides)}\n\n")
+                f.write("## Content:\n" + "\n".join(content))
+            
+            # Generate real thumbnails
+            self.generate_thumbnails()
+            messagebox.showinfo("Ready", f"Loaded {len(prs.slides)} slides with thumbnails!\nDrop another file or click Analyze.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+    
+    def generate_thumbnails(self):
+        # Clear old thumbnails
+        for widget in self.thumb_scroll.winfo_children():
+            widget.destroy()
+        
+        try:
+            powerpoint = win32com.client.Dispatch("PowerPoint.Application")
+            powerpoint.Visible = False
+            presentation = powerpoint.Presentations.Open(self.pptx_path, ReadOnly=True, WithWindow=False)
+            
+            for i, slide in enumerate(presentation.Slides, 1):
+                png_path = os.path.join(self.thumbnail_folder, f"slide_{i}.png")
+                slide.Export(png_path, "PNG", 800, 450)  # width, height
+                
+                # Display in GUI
+                img = Image.open(png_path)
+                ctk_img = CTkImage(light_image=img, dark_image=img, size=(320, 180))
+                
+                label = ctk.CTkLabel(self.thumb_scroll, text=f"Slide {i}", image=ctk_img, compound="top")
+                label.pack(pady=8, padx=5)
+            
+            presentation.Close()
+            powerpoint.Quit()
+        except Exception as e:
+            ctk.CTkLabel(self.thumb_scroll, text=f"Thumbnail error: {e}\n(Windows + PowerPoint required)", text_color="orange").pack()
+    
+    def import_excel(self):
+        path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx *.xls")])
+        if not path or not self.workspace:
+            messagebox.showwarning("Warning", "Load a PPTX first, then import Excel")
+            return
+        try:
+            import pandas as pd
+            df = pd.read_excel(path)
+            summary = df.to_string(max_rows=20)
+            with open(os.path.join(self.workspace, "data_from_excel.md"), "w", encoding="utf-8") as f:
+                f.write("# Imported Excel Data\n\n" + summary)
+            messagebox.showinfo("Success", "Excel data added to workspace – Codex will see it!")
+        except Exception as e:
+            messagebox.showerror("Excel Error", str(e))
+    
+    def ask_codex(self):
+        if not self.workspace:
+            return
+        
+        self.result_text.delete("1.0", tk.END)
+        self.result_text.insert(tk.END, "🤖 Running Codex in background (this may take 30–90 seconds)...\n\n")
+        self.update()
+        
+        try:
+            user_prompt = self.prompt_entry.get("1.0", tk.END).strip()
+            full_prompt = f"""You are a world-class PowerPoint designer.
+Attached files: presentation.pptx, slides_content.md, thumbnails folder, and (if present) data_from_excel.md.
 
-3. DECORATORS
-   - @login_required usage
-   - @roles_required usage
-   - @permissions_required usage
-   - Custom security decorators
-   - Rate limiting decorators
+{user_prompt}
 
-4. CONFIGURATION
-   - Session configuration
-   - Cookie security settings
-   - CORS settings
-   - Rate limiting settings
-   - Logging configuration
-   - Error handling configuration
+Requirements:
+1. Analyze the current design + thumbnails
+2. Give detailed improvement suggestions (layout, colors, fonts, icons, animations, hierarchy)
+3. Write a complete, ready-to-run Python script using python-pptx that applies your design and saves as improved_presentation.pptx"""
 
-5. FORM & REQUEST VALIDATION
-   - WTForms usage
-   - Marshmallow schema validation
-   - Pydantic model validation
-   - Custom validators
+            cmd = [
+                "codex", "exec",
+                "--cd", self.workspace,
+                "--approval-mode", "full-auto",      # completely automatic
+                "--sandbox", "workspace-write",
+                full_prompt
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, cwd=self.workspace)
+            output = result.stdout or result.stderr
+            
+            self.result_text.delete("1.0", tk.END)
+            self.result_text.insert(tk.END, output)
+            
+            if "```python" in output or "improve" in output.lower():
+                self.apply_btn.configure(state="normal")
+            
+            messagebox.showinfo("Codex Finished", "Review the suggestions and code above!")
+        except Exception as e:
+            messagebox.showerror("Codex Error", f"{str(e)}\n\nMake sure Codex CLI is installed (`codex --version`).")
+    
+    def apply_design(self):
+        script_path = os.path.join(self.workspace, "improve_presentation.py")
+        if not os.path.exists(script_path):
+            messagebox.showinfo("Info", "Codex gave suggestions but no script file. You can copy the code from the results panel and run it manually.")
+            return
+        
+        try:
+            subprocess.run(["python", script_path], cwd=self.workspace, check=True)
+            improved = os.path.join(self.workspace, "improved_presentation.pptx")
+            if os.path.exists(improved):
+                new_name = f"improved_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx"
+                shutil.copy(improved, os.path.join(os.path.dirname(self.pptx_path), new_name))
+                messagebox.showinfo("Success 🎉", f"Design applied!\nSaved as:\n{new_name}")
+            else:
+                messagebox.showwarning("Warning", "Script ran but improved file not found.")
+        except Exception as e:
+            messagebox.showerror("Apply Error", str(e))
 
-6. AUTHENTICATION SYSTEM
-   - User loader function
-   - Authentication mechanism (session/JWT/API key)
-   - Password hashing
-   - Token generation/validation
-
-7. DATABASE PROTECTION
-   - SQLAlchemy ORM usage
-   - Query parameterization
-   - Raw SQL query checks
-   - SQL injection prevention
-
-Map all security controls and their coverage across endpoints.
+if __name__ == "__main__":
+    app = PPTXCodexDesigner()
+    app.mainloop()
