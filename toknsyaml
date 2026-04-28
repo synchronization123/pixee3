@@ -1,55 +1,54 @@
-Here’s your updated, polished prompt with the PDF requirement included:
+Got it — if you only want a clean purpose/usage-focused write-up (no security, no issues section) and support for multiple JSP inputs, here’s a refined prompt:
 
 
 ---
 
-JSP File Documentation / Enhancement Request
+JSP Files Purpose & Usage Documentation Request
 
-We need a detailed write-up and review of an existing JSP file to support further development and maintenance.
+We need a clean and concise documentation write-up for one or more JSP files.
 
-Scope of Work:
+Input:
 
-1. Overview of the JSP File
+- The user will provide JSP file names (comma-separated)
+  Example: "login.jsp, dashboard.jsp, profile.jsp"
+
+Scope of Work (for each JSP file):
+
+1. Purpose
    
-   - Purpose and functionality of the file
-   - Where and how it is used in the application
+   - What the JSP file is used for
+   - Its role in the application
 
-2. Code Structure Explanation
+2. Usage
    
-   - Breakdown of key sections (HTML, JSP tags, scriptlets, JSTL, etc.)
-   - Description of any business logic present
+   - When and where this JSP is invoked
+   - User flow or navigation context
 
-3. Data Flow
+3. Data Handling
    
-   - Input parameters (request/session/application scope)
-   - Backend integration (Servlets, Controllers, APIs, DB calls)
-   - Output rendering logic
+   - Inputs received (request/session attributes)
+   - Outputs displayed on the UI
 
-4. Dependencies
+4. Integration
    
-   - Related Java classes, tag libraries, or frameworks used
-   - External resources (JS, CSS, includes)
+   - Associated Servlets / Controllers / backend components
+   - Any included JSPs, tag libraries, or UI components
 
-5. Issues / Observations
+5. UI Description
    
-   - Any code smells, performance concerns, or outdated practices (e.g., scriptlets)
-   - Security considerations (XSS, validation, etc.)
+   - Brief explanation of what the page renders
+   - Key elements shown to the user
 
-6. Suggestions / Improvements
-   
-   - Refactoring opportunities (e.g., move logic to backend, use JSTL/EL)
-   - Optimization or modernization recommendations
+Output Requirements:
 
-7. Edge Cases / Error Handling
-   
-   - How exceptions and invalid inputs are handled
+- Generate a well-structured, neatly formatted document
+- Each JSP file should have its own clearly separated section
+- Use headings, bullet points, and clean formatting for readability
+- Keep the explanation simple, clear, and developer-friendly
 
-Deliverable:
+Final Deliverable:
 
-- A well-structured, neatly formatted document explaining all the above points
-- Include annotated code snippets where necessary
-- The final output must be generated as a PDF document
+- Export the document as a PDF file
 - Save the file at: %USERPROFILE%/Downloads
-- Ensure proper formatting with headings, spacing, and readability suitable for sharing with developers
 
 ---
