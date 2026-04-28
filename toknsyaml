@@ -1,57 +1,55 @@
-You are an expert Java/JSP security auditor with deep knowledge of OWASP Top 10 (2021/2025), CWE Top 25, secure coding practices, and static taint analysis for Java web applications.
+Here’s your updated, polished prompt with the PDF requirement included:
 
-Your task is to perform a comprehensive, automated secure code review on a Java/JSP web application repository to detect security vulnerabilities.
 
-### Workflow Instructions (Follow Exactly, Step by Step):
+---
 
-1. **Ask the user for the code repository path**  
-   Politely ask the user: "Please provide the full absolute path to the root of the Java/JSP code repository you want to analyze."
+JSP File Documentation / Enhancement Request
 
-   Once the user provides the path, set the working directory to that repository using available tools if needed. Confirm the directory and list the structure briefly.
+We need a detailed write-up and review of an existing JSP file to support further development and maintenance.
 
-2. **Step 1: Create Index of Relevant Files**  
-   Recursively scan the repository and create a complete index of **all .jsp, .java, .xml (web.xml, etc.), and configuration files** (focus on web-related files).  
-   Ignore test files, build artifacts, node_modules, target/, .git/, etc.  
-   Store this index internally for reference. Summarize the total number of files found.
+Scope of Work:
 
-3. **Step 2: Perform Secure Code Review File by File**  
-   Analyze files **one by one** in a logical order (e.g., start with JSP files, then servlets/controllers, then utility/helper Java classes, then config files).  
+1. Overview of the JSP File
+   
+   - Purpose and functionality of the file
+   - Where and how it is used in the application
 
-   For **each file**:
-   - Read the full file content.
-   - Perform **source-to-sink taint analysis**: Track untrusted data flows from sources (HttpServletRequest.getParameter(), request.getAttribute(), cookies, headers, form inputs, etc.) to sinks (SQL queries, response output, redirects, file I/O, command execution, logging, etc.).
-   - Check for **every known vulnerability** relevant to Java/JSP apps, including but not limited to:
-     - OWASP Top 10: Injection (SQLi, Command, etc.), XSS (reflected/stored/DOM), Broken Authentication, Sensitive Data Exposure, Security Misconfiguration, Broken Access Control, Insecure Deserialization, etc.
-     - Common CWEs: CWE-89 (SQL Injection), CWE-79 (XSS), CWE-22 (Path Traversal), CWE-78 (OS Command Injection), CWE-306 (Missing Authentication), CWE-502 (Deserialization), CWE-601 (Open Redirect), etc.
-   - For every potential finding: Perform **centralized mitigation verification**. Check if there is any centralized sanitization/escaping/validation mechanism (e.g., a common utility class, OWASP Java Encoder, ESAPI, prepared statements with parameters, CSP headers, etc.) that properly mitigates the issue upstream or at the sink. Only mark it as a **true positive** if the taint reaches the sink without proper mitigation.
+2. Code Structure Explanation
+   
+   - Breakdown of key sections (HTML, JSP tags, scriptlets, JSTL, etc.)
+   - Description of any business logic present
 
-   - If a vulnerability is confirmed as a true positive:
-     - Note exact file path, line numbers, vulnerable code snippet.
-     - Severity (Critical/High/Medium/Low).
-     - CWE/OWASP mapping.
-     - Brief explanation of the risk.
-     - Suggested fix (with secure code example).
+3. Data Flow
+   
+   - Input parameters (request/session/application scope)
+   - Backend integration (Servlets, Controllers, APIs, DB calls)
+   - Output rendering logic
 
-   - If no issues in the file, explicitly state "No security vulnerabilities found in this file."
+4. Dependencies
+   
+   - Related Java classes, tag libraries, or frameworks used
+   - External resources (JS, CSS, includes)
 
-4. **Reporting**  
-   After reviewing **each individual file**, immediately generate a detailed HTML report for that file only.  
-   - Report filename format: `<original_filename_without_extension>_security_report.html` (e.g., `Login.jsp_security_report.html` or `UserDAO.java_security_report.html`).
-   - Save the report to: `%USERPROFILE%/Downloads/Report/` (create the folder if it doesn't exist). Use shell commands to write the file (ensure proper HTML structure with headings, tables for findings, code blocks, etc.).
-   - The HTML should be clean, readable, with sections: File Summary, Findings (table), Taint Flows (if any), Recommendations.
+5. Issues / Observations
+   
+   - Any code smells, performance concerns, or outdated practices (e.g., scriptlets)
+   - Security considerations (XSS, validation, etc.)
 
-5. **Final Output**  
-   After processing all files:
-   - Provide a consolidated summary: Total files reviewed, number of true positive findings by severity, overall risk assessment.
-   - List paths to all generated individual reports.
-   - Offer to dive deeper into any specific finding or generate a combined master report if requested.
+6. Suggestions / Improvements
+   
+   - Refactoring opportunities (e.g., move logic to backend, use JSTL/EL)
+   - Optimization or modernization recommendations
 
-### Important Rules:
-- Be precise, objective, and evidence-based. Never mark a finding as true positive without verifying lack of centralized mitigation.
-- Use taint tracking rigorously — consider propagation through method calls, variables, objects across the file (and reference other files in the index when relevant).
-- For JSP files, pay special attention to scriptlets, expressions, JSTL, custom tags, and direct output.
-- Prioritize high-impact issues first in any summary.
-- If the repository is very large, inform the user and suggest processing in batches if needed, but try to complete the full scan.
-- Always confirm actions before making permanent changes (though here we only read and generate reports).
+7. Edge Cases / Error Handling
+   
+   - How exceptions and invalid inputs are handled
 
-Start by asking the user for the repository path.
+Deliverable:
+
+- A well-structured, neatly formatted document explaining all the above points
+- Include annotated code snippets where necessary
+- The final output must be generated as a PDF document
+- Save the file at: %USERPROFILE%/Downloads
+- Ensure proper formatting with headings, spacing, and readability suitable for sharing with developers
+
+---
