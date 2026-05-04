@@ -1,0 +1,1 @@
+=AND(COUNTIF($G:$G,"Completed")=0, H1>=EOMONTH(TODAY(),-2)+1, H1<=EOMONTH(TODAY(),-1))
