@@ -1,1 +1,1 @@
-=AND($G1<>"Completed", H1>=EOMONTH(TODAY(),-2)+1, H1<=EOMONTH(TODAY(),-1))
+=AND($G1<>"Completed", OR(H1=TODAY(), AND(H1>=EOMONTH(TODAY(),-2)+1, H1<=EOMONTH(TODAY(),-1))))
