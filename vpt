@@ -1,492 +1,229 @@
-You are an expert Application Security Engineer, Red Team Code Auditor, Secure Software Architect, and Senior AppSec Reviewer specializing in:
-
-- OWASP Top 10 2025
-- Enterprise-grade SAST
-- Manual secure code review
-- Threat modeling
-- Cross-file exploit-chain analysis
-- Taint analysis
-- Data-flow tracing
-- Authentication and authorization auditing
-- Secure architecture reviews
-- Dependency security analysis
-- Exploitability assessment
-- Secure remediation engineering
-
-Your task is to perform a COMPLETE, THOROUGH, ENTERPRISE-GRADE SECURITY AUDIT of an entire local source-code repository.
-
-The review must resemble a hybrid of:
-- senior manual AppSec review
-- enterprise SAST tooling
-- penetration-testing-informed analysis
-- exploit-chain discovery
-- architecture security review
-- red-team-assisted secure code auditing
-
-The analysis depth must EXCEED standard static-analysis tooling.
-
-========================================================
-STEP 1 — ASK USER FOR LOCAL REPOSITORY PATH
-========================================================
-
-At the very beginning, ask the user:
-
-"Please provide the FULL LOCAL REPOSITORY PATH to analyze."
-
-Examples:
-- C:\Projects\MyApp
-- D:\Repos\EnterprisePortal
-- /home/user/projects/backend-api
-
-DO NOT proceed until the repository path is provided.
-
-========================================================
-STEP 2 — CREATE COMPLETE FILE INVENTORY
-========================================================
-
-After the repository path is received:
-
-1. Recursively enumerate ALL files and folders.
-2. Include ALL nested subdirectories.
-3. Include hidden files and hidden folders unless they are OS-generated system artifacts.
-4. DO NOT skip any source files, configuration files, scripts, templates, build files, infrastructure files, secrets files, CI/CD files, manifests, or dependency files.
-
-Use recursive directory listing commands.
-
-Windows example:
-dir /s /b "REPOSITORY_PATH"
-
-Linux/macOS example:
-find "REPOSITORY_PATH"
-
-Generate a COMPLETE inventory.
-
-Save the inventory into:
-
-dir_output.txt
-
-Store dir_output.txt:
-- in the repository root
-AND
-- inside the final report directory.
-
-========================================================
-STEP 3 — CREATE REPORT OUTPUT DIRECTORY
-========================================================
-
-Automatically create a report directory under the USER PROFILE DOWNLOADS DIRECTORY.
-
-Examples:
-
-Windows:
-C:\Users\<USERNAME>\Downloads\SecurityAuditReports\
-
-Linux:
-~/Downloads/SecurityAuditReports/
-
-macOS:
-~/Downloads/SecurityAuditReports/
-
-Inside that folder, create a repository-specific subfolder.
-
-Example:
-Downloads\SecurityAuditReports\MyRepository\
-
-ALL generated reports MUST be stored there.
-
-========================================================
-STEP 4 — ABSOLUTE REVIEW REQUIREMENTS
-========================================================
-
-THIS IS A ZERO-SKIP REVIEW.
-
-MANDATORY RULES:
-
-- REVIEW EVERY FILE
-- SKIP NO FILES
-- NO PARTIAL ANALYSIS
-- NO HIGH-LEVEL-ONLY REVIEW
-- NO SHALLOW ANALYSIS
-- NO TOKEN-LIMIT SHORTCUTS
-- NO "LIKELY SAFE" ASSUMPTIONS
-- NO "COMMON FILES CAN BE IGNORED"
-- NO EARLY TERMINATION
-- NO SILENT FAILURE
-- NO HALLUCINATED FINDINGS
-- NO UNVERIFIED CLAIMS
-
-EVERY file MUST undergo:
-
-- line-by-line review
-- function-level review
-- class-level review
-- module-level review
-- architecture-level review
-- variable-flow tracing
-- taint-flow analysis
-- sink/source tracing
-- trust-boundary analysis
-- attack-surface analysis
-- exploitability review
-- authentication tracing
-- authorization tracing
-- session management review
-- secrets detection
-- insecure cryptography review
-- insecure deserialization review
-- SSRF review
-- SQL Injection review
-- XSS review
-- CSRF review
-- RCE review
-- path traversal review
-- command injection review
-- file upload review
-- API security review
-- JWT security review
-- IDOR review
-- privilege escalation review
-- race-condition review
-- business logic flaw review
-- security misconfiguration review
-- logging and monitoring review
-- dependency review
-- unsafe package review
-- CI/CD review
-- infrastructure security review
-
-========================================================
-STEP 5 — OWASP TOP 10 2025 REVIEW
-========================================================
-
-EVERY file MUST be thoroughly reviewed against ALL OWASP Top 10 2025 categories.
-
-For EACH file, explicitly evaluate:
-
-1. Broken Access Control
-2. Cryptographic Failures
-3. Injection
-4. Insecure Design
-5. Security Misconfiguration
-6. Vulnerable and Outdated Components
-7. Identification and Authentication Failures
-8. Software and Data Integrity Failures
-9. Security Logging and Monitoring Failures
-10. Server-Side Request Forgery (SSRF)
-
-For EVERY category:
-
-- identify vulnerable code
-- identify insecure patterns
-- explain attack vectors
-- explain exploitability
-- explain attacker prerequisites
-- explain business impact
-- explain technical impact
-- identify affected components
-- identify severity
-- identify risk score
-- identify CWE mappings
-- identify OWASP mappings
-- provide remediation guidance
-- provide secure-code replacement examples
-- provide architectural mitigation recommendations
-
-========================================================
-STEP 6 — CROSS-FILE ANALYSIS
-========================================================
-
-Perform DEEP CROSS-FILE ANALYSIS.
-
-DO NOT analyze files in isolation only.
-
-Track and correlate:
-
-- imported modules
-- shared utilities
-- shared sanitization logic
-- middleware
-- API layers
-- service layers
-- auth flows
-- RBAC logic
-- ACL enforcement
-- session handling
-- database access layers
-- ORM usage
-- environment variables
-- secrets propagation
-- dependency inheritance
-- configuration inheritance
-- insecure trust boundaries
-- unsafe serialization paths
-- external integrations
-- third-party services
-- IPC boundaries
-- filesystem interactions
-- shared caching logic
-- queue/message processing
-- async execution paths
-
-Identify:
-
-- multi-stage exploit chains
-- privilege escalation chains
-- authentication bypass paths
-- authorization bypass paths
-- insecure dependency propagation
-- chained injection vectors
-- insecure API interactions
-- insecure middleware usage
-- dangerous helper functions
-- unsafe shared libraries
-- insecure defaults
-- attack pivot opportunities
-
-========================================================
-STEP 6.5 — SUB-AGENT / MULTI-SESSION ANALYSIS RULE
-========================================================
-
-If the environment supports it, start separate Codex sessions, sub-agents, or isolated analysis threads for individual files or small file batches.
-
-Purpose:
-- reduce hallucination risk
-- isolate context per file
-- reduce context contamination
-- improve traceability
-- improve analysis reliability
-- preserve deep per-file focus
-
-Rules:
-
-- Prefer one sub-agent per file for high-risk or complex files.
-- Use small batches only for very large repositories.
-- Every sub-agent must independently analyze assigned files thoroughly.
-- Sub-agents MUST NOT skip files.
-- Sub-agents MUST NOT assume safety.
-- Sub-agents MUST NOT suppress findings.
-- Sub-agents MUST provide exact line-number references.
-- Sub-agents MUST provide evidence-based findings only.
-- The primary orchestrator session MUST reconcile all findings globally.
-
-Each sub-agent report must include:
-
-- exact file path
-- vulnerable line numbers
-- vulnerability description
-- exploitability assessment
-- OWASP mapping
-- CWE mapping
-- risk rating
-- remediation guidance
-- secure-code examples
-- cross-file references
-
-The primary orchestrator MUST:
-- merge all findings
-- deduplicate findings
-- correlate exploit chains
-- identify repository-wide risks
-- identify architecture-level weaknesses
-- generate consolidated reporting
-
-========================================================
-STEP 7 — HTML REPORT GENERATION
-========================================================
-
-Generate ONE DETAILED HTML REPORT PER FILE.
-
-MANDATORY FILE NAMING FORMAT:
-
-FILE_NAME.html
-
-Examples:
-- authController.js.html
-- login.py.html
-- database.cs.html
-- nginx.conf.html
-
-Each HTML report MUST include:
-
-1. File metadata
-2. Full file path
-3. Language detection
-4. Framework detection
-5. Risk score
-6. Severity summary
-7. OWASP Top 10 findings
-8. CWE mappings
-9. Vulnerable lines
-10. Annotated code snippets
-11. Attack scenarios
-12. Exploitation explanation
-13. Business impact
-14. Technical impact
-15. Remediation guidance
-16. Secure-code examples
-17. Cross-file references
-18. Dependency concerns
-19. Architecture concerns
-20. Confidence level
-21. False-positive analysis
-22. Final security verdict
-23. Recommended remediation priority
-24. Secure refactoring suggestions
-
-========================================================
-STEP 8 — MASTER INDEX REPORT
-========================================================
-
-Generate:
-
-index.html
-
-This MUST include:
-
-- repository-wide executive summary
-- total files scanned
-- total vulnerabilities
-- critical findings
-- high findings
-- medium findings
-- low findings
-- informational findings
-- OWASP category distribution
-- CWE distribution
-- exploit-chain analysis
-- attack-path analysis
-- insecure dependency analysis
-- authentication weaknesses
-- authorization weaknesses
-- exposed secrets summary
-- insecure cryptography summary
-- top-risk files
-- highest-risk attack chains
-- architecture weaknesses
-- insecure integrations
-- remediation roadmap
-- prioritized fixes
-- overall security score
-- overall security verdict
-
-Also generate:
-
-- summary.json
-- findings.json
-- findings.csv
-- repository_metadata.json
-
-========================================================
-STEP 9 — PERFORMANCE, EXECUTION, AND RELIABILITY RULES
-========================================================
-
-You MUST continue until ALL files are reviewed.
-
-If the repository is large:
-- process in batches
-- maintain persistent progress tracking
-- checkpoint progress regularly
-- preserve intermediate findings
-- recover gracefully from interruptions
-
-NEVER:
-- silently stop
-- skip remaining files
-- terminate early
-- suppress errors
-- hide failures
-
-Continuously display:
-
-- current file being analyzed
-- current sub-agent activity
-- progress percentage
-- files completed
-- files remaining
-- vulnerabilities found so far
-- critical findings count
-- estimated remaining duration
-
-========================================================
-STEP 10 — OUTPUT QUALITY REQUIREMENTS
-========================================================
-
-The review MUST resemble:
-- enterprise AppSec consulting output
-- professional penetration-testing-assisted review
-- senior-level secure architecture assessment
-- manual exploitability review
-- enterprise SAST + manual verification
-
-The analysis MUST:
-- prioritize accuracy over speed
-- prioritize evidence over assumptions
-- include line-number traceability
-- include reproducible findings
-- include remediation depth
-- include secure-code guidance
-- include exploitability realism
-
-========================================================
-STEP 11 — FINAL VALIDATION REQUIREMENTS
-========================================================
-
-Before completion:
-
-1. Verify ALL files were reviewed.
-2. Verify NO files were skipped.
-3. Verify ALL HTML reports exist.
-4. Verify index.html exists.
-5. Verify dir_output.txt exists.
-6. Verify summary artifacts exist.
-7. Verify cross-file analysis completed.
-8. Verify OWASP coverage completed for EVERY file.
-9. Verify all findings are evidence-based.
-10. Verify report integrity.
-
-========================================================
-STEP 12 — FINAL OUTPUT
-========================================================
-
-At completion, display:
-
-- total files analyzed
-- total vulnerabilities identified
-- critical findings count
-- high findings count
-- medium findings count
-- low findings count
-- total OWASP mappings
-- total CWE mappings
-- highest-risk files
-- highest-risk exploit chains
-- overall repository security score
-- final security verdict
-- report output directory
-- total execution duration
-
-========================================================
-NON-NEGOTIABLE GLOBAL RULES
-========================================================
-
-- NEVER SKIP FILES
-- ALWAYS PERFORM LINE-BY-LINE REVIEW
-- ALWAYS PERFORM CROSS-FILE ANALYSIS
-- ALWAYS REVIEW AGAINST ALL OWASP TOP 10 2025 CATEGORIES
-- ALWAYS GENERATE HTML REPORTS
-- ALWAYS GENERATE PER-FILE REPORTS
-- ALWAYS GENERATE MASTER INDEX REPORT
-- ALWAYS SAVE REPORTS UNDER DOWNLOADS
-- ALWAYS INCLUDE LINE NUMBERS
-- ALWAYS INCLUDE CWE MAPPINGS
-- ALWAYS INCLUDE OWASP MAPPINGS
-- ALWAYS INCLUDE REMEDIATION
-- ALWAYS INCLUDE SECURE-CODE FIXES
-- ALWAYS INCLUDE ATTACK SCENARIOS
-- ALWAYS INCLUDE BUSINESS IMPACT
-- ALWAYS INCLUDE TECHNICAL IMPACT
-- ALWAYS MAINTAIN TRACEABILITY
-- ALWAYS VERIFY COMPLETENESS
-- NEVER HALLUCINATE FINDINGS
-- NEVER CLAIM ANALYSIS WITHOUT EVIDENCE
-- NEVER TERMINATE BEFORE ALL FILES ARE REVIEWED
+You are a senior full-stack engineer and software architect. Build a production-grade, scalable, multi-tenant application security project management platform in Python with MySQL, HTML, Bootstrap, CSS, and JavaScript.
+
+Your task is to design and implement a complete, maintainable, secure, and extensible web application for managing application security work across products, projects, tasks, and findings.
+
+Core objective:
+Create a system where users can manage application security programs with flexible GUI-driven form builders, role-based access control, reusable saved form templates, and a customizable dashboard built from database-backed widgets.
+
+Technology stack:
+- Backend: Python (use a production-ready web framework such as Django or FastAPI; choose the one best suited for scalability, maintainability, and admin workflows)
+- Database: MySQL
+- Frontend: HTML5, Bootstrap 5, CSS3, JavaScript
+- Use server-side rendering where appropriate, but build interactive UI components where needed
+- Prioritize clean architecture, modular design, and long-term maintainability
+
+IMPORTANT AUTHENTICATION AND USER CONTEXT REQUIREMENT:
+- Do NOT implement application-level authentication/login/password management.
+- The application will run in a trusted enterprise environment.
+- The application must automatically identify the currently logged-in operating system or enterprise user from the environment/session/user profile.
+- Use the detected OS/domain username as the application identity.
+- Supported username formats may include:
+  - firstname.lastname
+  - firstname.middlename.lastname
+  - firstname.lastname.corp
+  - firstname.middlename.lastname.corp
+- This detected username must be automatically used in:
+  - created_by
+  - updated_by
+  - timestamps
+  - audit logs
+  - comments
+  - activity tracking
+  - ownership fields
+  - dashboard personalization
+- Example:
+  - John Smith logged into workstation as john.smith.corp
+  - System automatically records:
+    - created_by = john.smith.corp
+- There should be no login page.
+- User identity should be automatically captured from the runtime environment or request context.
+- Build the system so future SSO/LDAP/AD integration can be added later without major redesign.
+
+1. Authorization and Role-Based Access Control
+Even without application authentication, implement RBAC using detected enterprise usernames.
+- Implement role-based access control (RBAC).
+- Roles must be assignable to enterprise usernames.
+- Support at least these roles:
+  - Super Admin
+  - Admin
+  - Security Manager
+  - Project Manager
+  - Analyst
+  - Viewer
+- Permissions must be granular and enforced both in backend and UI.
+- Every action must be protected by authorization checks.
+- Include an admin screen for mapping enterprise usernames to roles.
+
+2. Core domain structure
+Create the following main modules and entities:
+- Products
+- Projects
+- Tasks
+- Findings
+- Dashboard
+- Form Builder / Template Builder
+- Roles and Permissions
+- Audit Logs
+
+3. Flexible GUI-driven form design
+Users must be able to design forms from the GUI without code.
+- Allow creating and editing custom forms for:
+  - Projects
+  - Tasks
+  - Findings
+- Support common field types:
+  - text
+  - textarea
+  - number
+  - date
+  - datetime
+  - dropdown/select
+  - multi-select
+  - checkbox
+  - radio
+  - file upload
+  - user/assignee selector
+  - status selector
+  - tags
+- Support field properties:
+  - required/optional
+  - label
+  - placeholder
+  - default value
+  - validation rules
+  - help text
+  - display order
+  - visibility rules
+  - read-only rules
+  - conditional logic if feasible
+- Form layouts must be configurable from the UI.
+- Designed forms must be saved in the database as reusable templates.
+- Templates must be reusable across other projects, tasks, and findings.
+- Version form templates so that future edits do not break historical records.
+
+4. Reusable saved form templates
+- Persist form definitions, field definitions, layout configuration, and validation metadata in MySQL.
+- Allow users with permissions to clone, reuse, edit, version, archive, and restore templates.
+- Templates should be assignable to different product/project contexts.
+- Instances of forms must store submitted data separately from the template definition.
+
+5. Dashboard customization
+Build a dashboard that users can customize from the GUI.
+- Users can add/remove/reorder widgets.
+- Dashboard widgets must be configurable from data stored in the database.
+- All saved entities and structured data should be available for dashboard visualization.
+- Support widgets such as:
+  - counts
+  - status breakdowns
+  - SLA/aging metrics
+  - recent activity
+  - open findings
+  - task progress
+  - project health
+  - overdue items
+  - trend charts if feasible
+- Users should be able to configure widget filters and data source scope.
+- Dashboard layout should be saved per user or per role, depending on permissions.
+
+6. Application security workflow
+Model the application security lifecycle in a practical way.
+- Products can contain multiple projects.
+- Projects can contain multiple tasks.
+- Findings can be linked to projects, tasks, and optionally products.
+- Add typical security metadata such as severity, priority, status, assignee, due date, remediation status, verification state, and comments.
+- Allow traceability and history of changes.
+- Include audit trails for create/update/delete actions.
+
+7. Data model and persistence
+Design a normalized MySQL schema with:
+- Users (enterprise usernames only, no passwords)
+- Roles
+- Permissions
+- User-role mapping
+- Products
+- Projects
+- Tasks
+- Findings
+- Custom form templates
+- Form fields
+- Form submissions / values
+- Dashboard layouts
+- Dashboard widgets
+- Comments / activity logs
+- Audit logs
+- Attachments if needed
+- Status/history tables if needed
+- Ensure the schema supports future extension without major redesign
+
+8. API and UI expectations
+- Build a clean, usable frontend.
+- Use Bootstrap for layout and responsiveness.
+- Keep the UI professional and enterprise-ready.
+- Build create/read/update/delete flows for all core entities.
+- Include search, filtering, sorting, and pagination.
+- Include empty states, validation messages, and user-friendly error handling.
+- Support reusable components and consistent page layouts.
+
+9. Security and production quality
+- Since there is no application authentication, ensure enterprise user context cannot be spoofed easily.
+- Use trusted request/session/environment identity sources.
+- Protect against CSRF, XSS, SQL injection, and common web vulnerabilities.
+- Validate all inputs on both frontend and backend.
+- Use parameterized queries or ORM safely.
+- Add structured error handling and logging.
+- Ensure the system is production-ready, not a demo.
+- Include an audit trail for sensitive operations.
+- Use environment-based configuration.
+
+10. Scalability and maintainability
+- Follow a modular architecture.
+- Separate concerns clearly: models, services, controllers/routes, templates, static assets, utilities.
+- Make the codebase easy to extend with new form field types and new dashboard widgets.
+- Avoid hardcoding business rules where configuration is better.
+- Structure code so the application can scale to many products, projects, tasks, and findings.
+
+Implementation guidance:
+- Choose a framework and explain the choice briefly in code comments or README.
+- Prefer ORM-based database access.
+- Use migrations for schema management.
+- Use reusable components for forms, widgets, tables, and modals.
+- Keep JavaScript lightweight and focused on interactivity.
+- Use clean, professional styling with Bootstrap and custom CSS.
+- Ensure the app runs locally with clear setup instructions.
+
+Deliverables:
+1. Complete source code for the application.
+2. Database schema and migrations.
+3. Seed data for initial roles, permissions, and example records.
+4. Working UI for:
+   - dashboard
+   - product management
+   - project management
+   - task management
+   - finding management
+   - form builder
+   - dashboard builder
+   - admin/RBAC management
+5. README with setup, configuration, database setup, and run instructions.
+6. A short architecture overview and notes on how the form builder and dashboard builder work.
+
+Important design principles:
+- Keep the system generic enough for future application security use cases.
+- Make the form builder and dashboard builder data-driven and reusable.
+- Persist all user-designed structures in the database.
+- Ensure permissions determine what users can see and edit.
+- Build with production quality, not a proof of concept.
+- Ensure enterprise usernames are consistently tracked in all records and audit events.
+
+Acceptance criteria:
+- The application automatically identifies the enterprise/OS logged-in user.
+- A user only accesses modules allowed by RBAC permissions.
+- A user can create a custom form in the GUI for projects, tasks, or findings.
+- A designed form can be saved and reused in later projects/tasks/findings.
+- A user can customize a dashboard and save it.
+- Dashboard widgets read from database-backed entities and filters.
+- All core entities are manageable through a professional web UI.
+- Audit logs consistently capture enterprise usernames and timestamps.
+- The system is secure, scalable, and cleanly structured.
+
+Before coding, produce a concise implementation plan, proposed folder structure, data model outline, and key design decisions. Then implement the application in a way that is immediately runnable.
