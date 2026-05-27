@@ -1,17 +1,1 @@
-Agenda for Today’s Meeting
-
-1. Dependency Track Statuses
-   
-   - Discuss the current dependency track statuses.
-   - Align on which status should be used under specific scenarios and workflows.
-
-2. Migration from Jira to GitHub
-   
-   - Review the migration approach from Jira to GitHub.
-   - Discuss filtering and identification of mandatory fields required for Security Jira items.
-
-3. Automation of DIR, DS, and RFS Assignments
-   
-   - Discuss automation for DIR, DS, and RFS assignment handling.
-   - SRK proposed that the automation script should run from 12:30 p.m. to 9:00 p.m.
-   - The script will shuffle and distribute the articles appropriately during the execution window.
+..
