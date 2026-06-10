@@ -1,1 +1,8 @@
-skip(outputs('Compose'),1)
+trim(first(split(item(), 'Version:')))
+
+
+trim(first(split(last(split(item(), 'Version:')), 'Jira Count:')))
+
+
+trim(last(split(item(), 'Jira Count:')))
+
