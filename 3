@@ -1,6 +1,9 @@
 split(triggerOutputs()?['body/body'], 'Date:')
 
 
+skip(outputs('Compose'),1)
+
+
 trim(first(split(item(), 'Version:')))
 
 
