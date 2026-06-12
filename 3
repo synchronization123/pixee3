@@ -1,14 +1,5 @@
-split(triggerOutputs()?['body/body'], 'Date:')
+0 11 * * * /path/to/your/script.sh
 
+20 11 * * * /path/to/your/script.sh
 
-skip(outputs('Compose'),1)
-
-
-trim(first(split(item(), 'Version:')))
-
-
-trim(first(split(last(split(item(), 'Version:')), 'Jira Count:')))
-
-
-trim(last(split(item(), 'Jira Count:')))
-
+30 11 * * * /usr/bin/python3 /path/to/script.py
