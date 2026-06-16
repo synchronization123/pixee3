@@ -1,477 +1,70 @@
-Act as a Senior Solution Architect and Principal Full Stack Engineer.
-
-Design and develop a production-ready Project Management Application using:
-
-Backend:
-- Python (FastAPI preferred)
-- SQLAlchemy ORM
-- MySQL Database
-- REST APIs
-- Clean Architecture
-- Repository Pattern
-- Service Layer
-- DTO/Pydantic Models
-
-Frontend:
-- Bootstrap 5
-- Jinja2 Templates OR Bootstrap-based frontend
-- Responsive Design
-- Full-page enterprise layout
-- Professional corporate UI
-- Mobile-friendly
-
-The application must remain intentionally simple and easy to maintain while following enterprise development standards.
-
-====================================================
-STRICT HIERARCHY (MANDATORY)
-====================================================
-
-The system must strictly enforce the following hierarchy:
-
-Product
- └── Application
-      └── Project
-           └── Task
-                └── Finding
-
-Rules:
-- Products are top-level entities.
-- Applications belong to a Product.
-- Projects belong to an Application.
-- Tasks belong to a Project.
-- Findings belong to a Task.
-- No entity may exist outside its parent.
-- UI navigation and database relationships must strictly follow this hierarchy.
-
-====================================================
-CORE MODULES
-====================================================
-
-Create the following modules/screens:
-
-1. Dashboard
-2. Products
-3. Applications
-4. Projects
-5. Tasks
-6. Findings
-7. Screen Designer
-8. Templates
-9. Audit Logs
-
-====================================================
-CRUD REQUIREMENTS
-====================================================
-
-Provide complete Create, Read, Update, Delete functionality for:
-
-- Products
-- Applications
-- Projects
-- Tasks
-- Findings
-- Templates
-
-Include:
-- Search
-- Sorting
-- Filtering
-- Pagination
-- Detail View
-- Bulk Delete (optional)
-
-====================================================
-FILE MANAGEMENT
-====================================================
-
-File uploads must be available at ALL levels:
-
-- Product
-- Application
-- Project
-- Task
-- Finding
-
-Requirements:
-
-- Store files directly in MySQL as BLOB.
-- Maintain file metadata.
-- Upload file.
-- Download file.
-- Replace file.
-- Delete file.
-- Display uploaded files in attachment section.
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GitHub Project Dashboard</title>
 
-Attachment fields:
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+</head>
 
-- Id
-- EntityType
-- EntityId
-- FileName
-- FileExtension
-- MimeType
-- FileBlob
-- UploadedBy
-- UploadedDate
+<body>
 
-====================================================
-USER HANDLING
-====================================================
+<div class="container mt-4">
 
-Authentication is NOT required.
+    <h2 class="mb-4">
+        GitHub Projects Dashboard
+    </h2>
 
-Assume the application receives a logged-in username from the hosting environment.
+    <div class="row">
 
-Example:
+        {% for repo in repositories %}
 
-{
-  "username": "John.Smith"
-}
+        <div class="col-md-4 mb-4">
 
-Use this username automatically for:
+            <div class="card h-100">
 
-- CreatedBy
-- ModifiedBy
-- UploadedBy
-- Audit Logging
+                <div class="card-body">
 
-Never ask users to manually enter usernames.
+                    <h5 class="card-title">
+                        {{ repo.name }}
+                    </h5>
 
-====================================================
-AUDIT LOGGING
-====================================================
+                    <p class="card-text">
+                        {{ repo.description }}
+                    </p>
 
-Implement complete audit logging.
+                    <p>
+                        <strong>Language:</strong>
+                        {{ repo.language }}
+                    </p>
 
-Create a dedicated Audit Logs screen.
+                    <p>
+                        <strong>Visibility:</strong>
+                        {{ repo.visibility }}
+                    </p>
 
-Track:
+                    <p>
+                        <strong>Updated:</strong>
+                        {{ repo.updated_at }}
+                    </p>
 
-- Create
-- Update
-- Delete
-- File Upload
-- File Delete
-- Template Assignment
-- Template Changes
-- Status Changes
+                    <a href="{{ repo.url }}"
+                       target="_blank"
+                       class="btn btn-primary">
+                        Open Repository
+                    </a>
 
-Store:
+                </div>
 
-- Timestamp
-- Username
-- Entity Type
-- Entity Id
-- Action
-- Field Name
-- Old Value
-- New Value
+            </div>
 
-Requirements:
+        </div>
 
-- Capture old value and new value for every update.
-- Audit logs must be immutable.
-- Display logs with filtering and pagination.
+        {% endfor %}
 
-====================================================
-SCREEN DESIGNER MODULE
-====================================================
+    </div>
 
-Provide a Screen Designer for:
+</div>
 
-- Projects
-- Tasks
-- Findings
-
-Users can design dynamic forms.
-
-Supported controls:
-
-- Textbox
-- Text Area
-- Number
-- Dropdown
-- Checkbox
-- Radio Button
-- Date Picker
-- File Upload
-- Rich Text
-
-Capabilities:
-
-- Drag and drop ordering
-- Field validation
-- Required fields
-- Default values
-- Save template
-- Edit template
-- Clone template
-
-====================================================
-TEMPLATE MANAGEMENT
-====================================================
-
-Users can:
-
-- Create template
-- Edit template
-- Save template
-- Reuse template
-
-Templates can be assigned while creating:
-
-- Project
-- Task
-- Finding
-
-====================================================
-CRITICAL TEMPLATE LOCKING RULE
-====================================================
-
-This is a mandatory business rule.
-
-When a Project is created:
-
-Project
-- Template Assigned = Template A
-- Template Locked = True
-
-Then:
-
-All Tasks under that Project
-All Findings under those Tasks
-
-must inherit Template A.
-
-Restrictions:
-
-If Project Template Locked = True:
-
-- Project template cannot be changed.
-- Task template cannot be changed.
-- Finding template cannot be changed.
-- New tasks must inherit project template.
-- New findings must inherit project template.
-
-Users may edit data entered through the template.
-
-Users may NOT modify template assignment.
-
-Template locking must be enforced at:
-- UI level
-- API level
-- Database validation level
-
-====================================================
-DASHBOARD
-====================================================
-
-Dashboard should include:
-
-Summary Cards:
-
-- Total Products
-- Total Applications
-- Total Projects
-- Total Tasks
-- Total Findings
-
-Recent Activity:
-
-- Recent Creates
-- Recent Updates
-- Recent Deletes
-
-Charts:
-
-- Project Status
-- Task Status
-- Finding Severity
-
-====================================================
-PRODUCTS MODULE
-====================================================
-
-Fields:
-
-- Product Code
-- Product Name
-- Description
-- Status
-- Attachments
-
-Features:
-
-- CRUD
-- Search
-- Filter
-- Pagination
-
-====================================================
-APPLICATIONS MODULE
-====================================================
-
-Fields:
-
-- Application Code
-- Application Name
-- Product Mapping
-- Description
-- Status
-
-Features:
-
-- CRUD
-- Search
-- Filter
-- Pagination
-
-====================================================
-PROJECTS MODULE
-====================================================
-
-Fields:
-
-- Project Code
-- Project Name
-- Application
-- Description
-- Template
-- Template Locked
-- Status
-
-Features:
-
-- CRUD
-- Attachments
-- Template Assignment
-
-====================================================
-TASKS MODULE
-====================================================
-
-Fields:
-
-- Task Code
-- Task Name
-- Project
-- Description
-- Status
-- Assigned To
-
-Features:
-
-- CRUD
-- Attachments
-- Template Inheritance
-
-====================================================
-FINDINGS MODULE
-====================================================
-
-Fields:
-
-- Finding Title
-- Description
-- Severity
-- Status
-- Task
-
-Features:
-
-- CRUD
-- Attachments
-- Template Inheritance
-
-====================================================
-UI/UX REQUIREMENTS
-====================================================
-
-Use Bootstrap 5 professionally.
-
-Requirements:
-
-- Modern enterprise appearance
-- Responsive layouts
-- Full width usage
-- Professional tables
-- Breadcrumb navigation
-- Modal forms
-- Consistent spacing
-- Reusable components
-
-====================================================
-LOADING EXPERIENCE
-====================================================
-
-Show loading indicators during:
-
-- Page load
-- Save
-- Update
-- Delete
-- File upload
-- File download
-- Template save
-- Dashboard load
-
-Use Bootstrap modal loaders or overlay spinners.
-
-====================================================
-DATABASE REQUIREMENTS
-====================================================
-
-Use MySQL.
-
-Create normalized tables with:
-
-- Primary Keys
-- Foreign Keys
-- Indexes
-- Cascading rules where appropriate
-
-Implement:
-
-- Soft Delete support
-- CreatedDate
-- ModifiedDate
-- CreatedBy
-- ModifiedBy
-
-on all business entities.
-
-====================================================
-NON-FUNCTIONAL REQUIREMENTS
-====================================================
-
-- Production-ready code
-- Clean Architecture
-- SOLID principles
-- Reusable components
-- Error handling middleware
-- Centralized logging
-- Validation framework
-- Transaction management
-- SQL Injection protection
-- XSS protection
-- Scalable database design
-- Maintainable code structure
-
-Generate:
-1. Complete database schema.
-2. SQLAlchemy models.
-3. Repository layer.
-4. Service layer.
-5. API endpoints.
-6. Bootstrap UI screens.
-7. Screen Designer module.
-8. Template management module.
-9. Audit logging module.
-10. File management module.
-11. Project structure.
-12. Deployment-ready application code.
-
-Strictly follow the hierarchy:
-Product → Application → Project → Task → Finding
-
-Do not simplify or alter this hierarchy under any circumstances.
+</body>
+</html>
