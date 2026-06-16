@@ -1,5 +1,65 @@
-0 11 * * * /path/to/your/script.sh
+import requests
+from flask import Flask, render_template
 
-20 11 * * * /path/to/your/script.sh
+# ==========================
+# Configuration
+# ==========================
+GITHUB_BASE_URL = "https://api.github.com"   # Change if using GitHub Enterprise
+GITHUB_TOKEN = "YOUR_GITHUB_TOKEN"
 
-30 11 * * * /usr/bin/python3 /path/to/script.py
+app = Flask(__name__)
+
+def get_repositories():
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    repos = []
+    page = 1
+
+    while True:
+        response = requests.get(
+            f"{GITHUB_BASE_URL}/user/repos",
+            headers=headers,
+            params={"per_page": 100, "page": page}
+        )
+
+        if response.status_code != 200:
+            return [{
+                "name": "API Error",
+                "description": response.text
+            }]
+
+        data = response.json()
+
+        if not data:
+            break
+
+        for repo in data:
+            repos.append({
+                "name": repo.get("name"),
+                "description": repo.get("description") or "No description",
+                "visibility": repo.get("visibility"),
+                "language": repo.get("language"),
+                "updated_at": repo.get("updated_at"),
+                "url": repo.get("html_url")
+            })
+
+        page += 1
+
+    return repos
+
+
+@app.route("/")
+def dashboard():
+    repositories = get_repositories()
+    return render_template(
+        "index.html",
+        repositories=repositories
+    )
+
+
+if __name__ == "__main__":
+    print("Dashboard available at http://127.0.0.1:5000")
+    app.run(debug=False)
