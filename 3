@@ -1,1 +1,1 @@
-du -sh /epic/* /epic/.* 2>/dev/null | sort -hr
+find /epic/docker -name "*.log" -type f -printf "%TY-%Tm-%Td %TH:%TM:%TS %p\n" | sort -r | head -20
