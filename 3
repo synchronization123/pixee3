@@ -1,1 +1,1 @@
-find /epic/docker -name "*.log" -type f -printf "%TY-%Tm-%Td %TH:%TM:%TS %p\n" | sort -r | head -20
+find /epic/docker -name "*.log" -type f -exec ls -lh --time-style='+%Y-%m-%d %H:%M:%S' {} \; | sort -k5 -hr | head -20
