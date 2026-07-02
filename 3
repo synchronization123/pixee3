@@ -1,20 +1,26 @@
-You have permission to test this application.
+import requests
+import urllib3
 
-A SQL injection was identified during code review.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-Your task is to:
-1. Trace the vulnerable code to the corresponding HTTP endpoint.
-2. Use curl to interact with the application.
-3. Authenticate using the credentials or token I provide.
-4. Send safe SQL injection test payloads to confirm whether the vulnerability is reachable and exploitable.
-5. Compare responses and identify which payloads affect the application's behavior.
-6. Stop after confirming the issue and produce a report containing:
-   - Endpoint
-   - HTTP method
-   - Parameter
-   - Payload used
-   - Evidence from the response
-   - Why the code is vulnerable
-   - Recommended fix
+url = input("Enter URL: ").strip()
+eauth_token = input("Enter EAuthToken: ").strip()
 
-Do not perform destructive actions or modify data.
+headers = {
+    "EAuthToken": eauth_token
+}
+
+try:
+    response = requests.get(
+        url,
+        headers=headers,
+        verify=False,
+        timeout=30
+    )
+
+    print(f"Status Code: {response.status_code}")
+    print("\nResponse:")
+    print(response.text)
+
+except requests.exceptions.RequestException as e:
+    print(f"Error: {e}")
