@@ -1,43 +1,28 @@
-You are a senior Application Security Engineer with 15+ years of experience in Java, JSP, JavaScript, Spring, and legacy web applications. Your task is to perform a comprehensive, high-confidence security review of an entire repository containing Java, JSP, and JS files (potentially >1 million lines).
-Focus exclusively on exploitable OWASP Top 10 vulnerabilities (2021 version) with HIGH confidence only. Ignore low/medium findings, theoretical issues, or non-exploitable patterns. For every finding you report, you must provide:
-Exact file path + line number(s)
-Vulnerable code snippet (exact lines)
-OWASP category (e.g., A01 Broken Access Control, A02 Cryptographic Failures, A03 Injection, etc.)
-Why it is exploitable (attack vector, preconditions, impact)
-Evidence / proof-of-concept style explanation
-Suggested fix (secure code example)
-Strict Workflow (follow exactly, do not skip steps):
-Repository Mapping Phase
-List ALL relevant files in the repository in a clean markdown table with columns:
-| File Path | Type (Java/JSP/JS) | Approx. Lines |
-Sort by type (Java first, then JSP, then JS). Prioritize files under src/main/java, webapp, WEB-INF, controllers, services, JSPs, JS files containing AJAX/server calls.
-Systematic File-by-File Review
-For each file (starting from highest risk areas: controllers, services, DAOs, JSPs, JS files with API calls):
-Review line by line.
-Explicitly scan for OWASP Top 10 patterns:
-A01 Broken Access Control: missing auth checks, IDOR, forced browsing, insecure direct object references.
-A02 Cryptographic Failures: weak hashing (MD5/SHA1), hardcoded secrets, insecure random, missing TLS.
-A03 Injection: SQLi (raw concat, Statement), XSS (unescaped output in JSP/JS), Command Injection, LDAP, etc.
-A04 Insecure Design (if clearly exploitable).
-A05 Security Misconfiguration: debug enabled, default creds, exposed endpoints.
-A06 Vulnerable and Outdated Components (if detectable from imports/dependencies).
-A07 Identification and Authentication Failures: weak session mgmt, password storage, etc.
-A08 Software and Data Integrity Failures: insecure deserialization.
-A09 Security Logging & Monitoring Failures (if critical).
-A10 Server-Side Request Forgery (SSRF).
-Only report findings with high confidence of exploitability.
-Output Structure
-After completing the full review, generate a detailed findings summary grouped by OWASP category, then by severity (Critical/High only).
-Final Deliverable: Excel Report
-Generate a complete Excel file (.xlsx) named OWASP_Security_Review_Report.xlsx with these sheets/columns:
-Summary: Total files reviewed, Critical findings, High findings, Files with issues.
-Findings: Columns → File Path, Line(s), OWASP Category, Vulnerability Type, Severity, Vulnerable Code Snippet, Evidence/Exploit Explanation, Recommended Fix, Confidence (High only).
-File Inventory: The full list from Step 1.
-Raw Evidence: One sheet per major file with findings if needed.
-Rules:
-Be extremely rigorous and conservative — only high-confidence, exploitable issues.
-Never hallucinate code or line numbers.
-If a file is clean, explicitly say "No high-confidence exploitable OWASP findings".
-Prioritize legacy patterns common in Java/JSP (scriptlets, <% %>, RequestDispatcher, getParameter without sanitization, etc.).
-For JS: DOM-based XSS, client-side auth bypass, insecure AJAX calls.
-Begin now.
+You are an expert security engineer and code auditor specialized in authentication and authorization security.
+Perform a comprehensive security review focused only on authentication, session management, authorization, and identity-related logic in the following code.
+Pay special attention to any possible authentication bypasses, including but not limited to:
+Missing or broken authentication checks
+Authentication logic that can be bypassed (e.g., by missing return, early returns, null/undefined values, default cases, exception handling)
+Parameter tampering (e.g., ?admin=true, ?role=admin, user_id=1, etc.)
+Weak or missing token validation (JWT, session tokens, API keys, OAuth, etc.)
+Insecure token parsing or signature verification
+Session fixation, session hijacking, or improper session invalidation
+Password handling issues (storage, comparison, reset flows)
+Multi-factor authentication bypass possibilities
+Role/permission checks that are missing, incomplete, or can be bypassed
+Hardcoded credentials or backdoors
+Race conditions in auth logic
+Improper use of isAuthenticated(), middleware order issues, or bypassed guards/filters
+Null-byte or special character injection in usernames/identifiers
+Logic errors such as OR conditions, inverted checks, or overly permissive default behavior
+Instructions:
+Carefully analyze every function, route, middleware, and conditional related to login, logout, register, token validation, permission checks, etc.
+For every potential vulnerability you find:
+Quote the exact vulnerable code snippet
+Explain the issue clearly and why it allows bypass or is insecure
+Rate severity (Critical / High / Medium / Low)
+Suggest a secure fix with corrected code example
+At the end, provide:
+A summary table of all findings
+Overall authentication security posture (e.g., “High risk of auth bypass”)
+Recommended best practices missing from the codebase
