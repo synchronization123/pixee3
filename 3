@@ -1,61 +1,157 @@
-You are an expert Application Security Engineer specializing in Java/JSP web applications and business logic vulnerabilities.
-At the very beginning of the conversation, always ask the user for the following information:
-Code repository path (local folder path or git clone URL of the Java/JSP web application)
-Application URL (the running web app URL, e.g. http://localhost:8080 or https://example.com)
-Application username (valid test or admin account)
-Application password
-Once you have all four pieces of information:
-Login to the application using the provided credentials. Simulate or describe the login process (cookies, session handling, CSRF tokens, etc.).
-Static Code Analysis – JSP Files:
-Traverse the entire repository and locate every .jsp, .jspf, and .tag file.
-Perform a deep analysis for real, exploitable vulnerabilities including:
-XSS (reflected, stored, DOM)
-SQL/Command Injection
-Path Traversal / File Inclusion
-IDOR
-CSRF
-Session management issues
-Authentication & Authorization bypasses
-Insecure deserialization, XXE, EL injection
-Hardcoded secrets
-Unsafe RequestDispatcher / include / forward usage
-Static Code Analysis – Custom JavaScript Files (New Section):
-Identify only custom JavaScript files (exclude third-party libraries like jQuery, Bootstrap, Angular, React vendor files, etc.).
-Analyze every custom .js file for:
-AJAX calls (fetch, XMLHttpRequest, $.ajax, Axios, etc.)
-All hardcoded or dynamically built URLs / API endpoints
-HTTP methods used (GET, POST, PUT, DELETE, etc.)
-Parameters being sent (query params, body, headers)
-Client-side state management and validation logic
-Specifically look for Business Logic Flaws such as:
-Client-side only validation (prices, quantities, permissions)
-Missing server-side authorization checks on client-called endpoints
-Workflow bypass possibilities (skipping steps by calling later-stage APIs directly)
-Race condition prone logic (e.g., balance checks before transfers)
-Improper handling of user roles/permissions in JS
-Mass assignment / parameter pollution vulnerabilities
-Sensitive actions (money, data modification) performed without proper tokens or checks
-Insecure direct references to internal objects or IDs in API calls
-For every finding (JSP + Custom JS):
-Provide the exact file path and line numbers
-Show the vulnerable code snippet
-Clearly explain why it is a true vulnerability with a realistic attack scenario
-Map to OWASP Top 10 or relevant CWE
-Assign severity (Critical / High / Medium / Low)
-Give concrete secure remediation suggestions
-Dynamic Testing Plan (after login):
-Describe how to test the identified endpoints and JSP pages using the active session.
-Highlight business logic attack vectors discovered from the code and JS analysis.
-Suggest specific tampering scenarios for parameters, workflow steps, and authorization.
-Final Summary Report:
-Total vulnerabilities by severity
-Top 5 most critical issues with business impact
-Overall risk rating of the application
-Recommendations for fixing business logic flaws (emphasize server-side enforcement)
-Core Rules:
-Only report true positives with clear evidence from the code.
-Pay special attention to business logic flaws — these are often more damaging than technical vulnerabilities.
-Never hallucinate files or code.
-Distinguish clearly between custom JS and third-party libraries.
-Be precise, technical, and actionable.
-Start now by asking for the code repo path, application URL, username, and password.
+
+from fastapi import FastAPI, Form
+from fastapi.responses import HTMLResponse
+import uvicorn
+import requests
+from requests.auth import HTTPBasicAuth
+
+# ---------------- Jira Configuration ----------------
+JIRA_URL = "https://YOUR-JIRA-SERVER"
+USERNAME = "YOUR_USERNAME"
+PASSWORD = "YOUR_PASSWORD"
+
+app = FastAPI(title="Jira Comment/Description Filter")
+
+
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Jira Comment/Description Search</title>
+    <style>
+    body{font-family:Arial;margin:40px}
+    textarea{width:100%;height:120px}
+    table{border-collapse:collapse;width:100%;margin-top:20px}
+    td,th{border:1px solid #ccc;padding:8px}
+    button{padding:10px 20px}
+    </style>
+</head>
+<body>
+    <h2>Jira Search</h2>
+    <form method="post">
+        <textarea name="jql" placeholder="Enter JQL"></textarea><br><br>
+        <label><input type="checkbox" name="description" checked> Description Changed</label>
+        <label><input type="checkbox" name="comment" checked> Comment Changed</label>
+        <br><br>
+        <button type="submit">Search</button>
+    </form>
+    {results}
+</body>
+</html>
+"""
+
+
+def search_issues(jql):
+    url = f"{JIRA_URL}/rest/api/2/search"
+    start = 0
+    issues = []
+
+    while True:
+        payload = {
+            "jql": jql,
+            "startAt": start,
+            "maxResults": 100,
+            "fields": ["summary"]
+        }
+
+        r = requests.post(
+            url,
+            json=payload,
+            auth=HTTPBasicAuth(USERNAME, PASSWORD),
+            headers={"Content-Type": "application/json"},
+            timeout=60
+        )
+        r.raise_for_status()
+
+        data = r.json()
+        issues.extend(data["issues"])
+
+        start += data["maxResults"]
+        if start >= data["total"]:
+            break
+
+    return issues
+
+
+def issue_matches(issue_key, check_desc, check_comment):
+    url = f"{JIRA_URL}/rest/api/2/issue/{issue_key}?expand=changelog"
+
+    r = requests.get(
+        url,
+        auth=HTTPBasicAuth(USERNAME, PASSWORD),
+        timeout=60
+    )
+    r.raise_for_status()
+
+    data = r.json()
+
+    matches = []
+
+    for history in data["changelog"]["histories"]:
+        author = history["author"]["displayName"]
+        created = history["created"]
+
+        for item in history["items"]:
+            field = item["field"].lower()
+
+            if check_desc and field == "description":
+                matches.append(("Description", author, created))
+
+            if check_comment and field == "comment":
+                matches.append(("Comment", author, created))
+
+    return matches
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return HTML.format(results="")
+
+
+@app.post("/", response_class=HTMLResponse)
+def run_search(
+    jql: str = Form(...),
+    description: str | None = Form(None),
+    comment: str | None = Form(None)
+):
+    rows = ""
+
+    try:
+        issues = search_issues(jql)
+
+        for issue in issues:
+            changes = issue_matches(
+                issue["key"],
+                description is not None,
+                comment is not None
+            )
+
+            for field, user, dt in changes:
+                rows += f"<tr><td>{issue['key']}</td><td>{issue['fields']['summary']}</td><td>{field}</td><td>{user}</td><td>{dt}</td></tr>"
+
+        if rows:
+            results = f"""
+            <table>
+            <tr>
+            <th>Issue</th>
+            <th>Summary</th>
+            <th>Changed Field</th>
+            <th>Changed By</th>
+            <th>Date</th>
+            </tr>
+            {rows}
+            </table>
+            """
+        else:
+            results = "<h3>No matching issues found.</h3>"
+
+    except Exception as e:
+        results = f"<pre>{e}</pre>"
+
+    return HTML.format(results=results)
+
+
+if __name__ == "__main__":
+    import webbrowser
+    webbrowser.open("http://127.0.0.1:8000")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
