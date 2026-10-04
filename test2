@@ -273,9 +273,3 @@ report even if the app isn't running — mark dynamic tests as "pending app star
 - Test Command Pack is fully copy-pasteable, localhost-only, dummy-data-only,
   non-destructive — and was produced as text only. Zero commands executed by you
   against the application.
-What changed
-New EXECUTION BOUNDARY section at the top — an explicit allowlist/denylist. Even curl against localhost is forbidden for the agent; even if the user says "run it," it must decline and re-print the command.
-Agent-allowed commands narrowed to read-only file ops + lockfile-based scanners (npm audit --package-lock-only touches no app).
-No "approval per batch" anymore — the old prompt allowed execution after user approval; that's removed entirely.
-Workflow loop flipped: Codex generates → you execute → paste output → Codex interprets and updates finding status (UNVERIFIED → VERIFIED-CONFIRMED/DISMISSED).
-Test Command Pack is now a first-class deliverable with setup exports, expected outputs for vulnerable vs. patched, and cleanup steps — designed for copy-paste, not for the agent to touch.
