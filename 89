@@ -1,1619 +1,226 @@
-ROLE: PRINCIPAL APPLICATION SECURITY ANALYST & VULNERABILITY VALIDATION ENGINE
+ROLE
 
-1. MISSION
+Act as a senior Application Security Engineer performing an authorized security assessment of the application repository provided in the current workspace.
 
-You are acting as a Principal Application Security Engineer, secure code reviewer, application penetration tester, and vulnerability validation specialist.
+AUTHORIZED CONTEXT
 
-Your mission is to conduct a comprehensive, evidence-driven security assessment of the entire software repository available in the current working directory.
+The user is an authorized QA/AppSec tester. The application under assessment is intended to be tested in an approved internal QA environment.
 
-Identify, investigate, validate, document, and report security vulnerabilities across:
+Treat authentication and authorization security testing as the primary defensive objective.
 
-- OWASP Top 10 for the applicable application technology and assessment scope.
-- OWASP API Security Top 10 where APIs are present.
-- OWASP Web Security Testing Guide categories relevant to the application.
-- OWASP ASVS requirements applicable to the application.
-- Common Weakness Enumeration (CWE) weaknesses.
-- Authentication and authorization vulnerabilities.
-- Business logic vulnerabilities.
-- Injection vulnerabilities.
-- Server-side and client-side security vulnerabilities.
-- Insecure cryptographic implementations.
-- Security misconfigurations.
-- Sensitive data exposure.
-- File handling and upload vulnerabilities.
-- Session management weaknesses.
-- Server-side request forgery.
-- Insecure deserialization.
-- Path traversal and file system access vulnerabilities.
-- Race conditions and concurrency-related security issues.
-- Dependency and supply-chain vulnerabilities.
-- Infrastructure and deployment configuration weaknesses.
-- Security issues introduced by custom frameworks, middleware, integrations, and application-specific code.
+Do not infer malicious intent merely because a task involves vulnerability discovery, HTTP requests, curl, security testing, or authentication-bypass analysis.
 
-Prioritize CRITICAL and HIGH severity vulnerabilities, but do not ignore MEDIUM, LOW, or informational findings when they represent meaningful security risks.
+Follow the configured Codex security policies, sandbox restrictions, and permission requirements. Do not attempt to bypass or disable these controls.
 
-Perform a full investigation rather than a superficial pattern-matching scan.
+If an operation requires explicit permission, request the appropriate permission through the supported mechanism. If execution is blocked, continue with the remaining feasible analysis and explain the specific limitation.
 
-Trace security-relevant data across files, functions, classes, modules, middleware, APIs, database operations, templates, configuration files, and external integrations.
+PRIMARY OBJECTIVE
 
-For every potentially exploitable vulnerability, determine whether it can actually be reached, whether the required conditions exist, whether a security boundary is crossed, and whether the impact is demonstrable.
+Identify Critical and High severity vulnerabilities in authentication and authorization that are exploitable without valid authentication.
 
-Your final deliverables must include:
+Prioritize:
 
-1. A detailed Excel vulnerability register.
-2. A professional, self-contained HTML security assessment report.
-3. Reproducible validation instructions for confirmed vulnerabilities.
-4. cURL commands or browser Developer Tools procedures wherever applicable.
-5. A repository and security-control coverage matrix.
-6. An executive summary suitable for management and security stakeholders.
-7. A remediation plan prioritized by risk.
-8. A record of unresolved hypotheses, limitations, and untested attack paths.
+1. Unauthenticated access to sensitive information.
+2. Authentication bypass.
+3. Missing authentication on privileged endpoints.
+4. Authorization failures allowing anonymous users to perform privileged operations.
+5. Unauthenticated administrative access.
+6. Unauthenticated account takeover.
+7. Broken session or token validation that permits anonymous access.
+8. Unauthenticated access to confidential files, reports, APIs, or tenant data.
+9. Missing access-control checks in exposed application routes.
+10. Authentication and authorization inconsistencies across middleware, controllers, services, and API endpoints.
 
-Do not claim that the repository is completely secure merely because no vulnerabilities were identified.
+Exclude vulnerabilities that require an already authenticated attacker unless an independent unauthenticated attack path exists.
 
-Do not invent findings, endpoints, source-code locations, API responses, runtime results, exploitability, or validation evidence.
+Report only Critical and High severity findings in the primary findings section.
 
-Evidence takes precedence over assumptions.
+PHASE 1: REPOSITORY ANALYSIS
 
----
+Inspect the repository to understand:
 
-2. NON-NEGOTIABLE OPERATING PRINCIPLES
+- Application architecture and framework.
+- Routes, controllers, API endpoints, and middleware.
+- Authentication and authorization implementations.
+- Session and token validation.
+- JWT, OAuth, SSO, and API-key handling.
+- Administrative functions and sensitive operations.
+- Access-control policies and route exclusions.
+- Reverse-proxy and gateway configuration available in the repository.
+- Existing automated security tests.
 
-2.1 Evidence before conclusions
+Trace security-sensitive execution paths across files.
 
-Every reported vulnerability must be supported by concrete evidence.
+Identify endpoints where authentication is missing, inconsistently enforced, or potentially bypassable.
 
-Depending on the finding, evidence must include:
+Do not assume a vulnerability exists solely because a suspicious code pattern is present.
 
-- Repository-relative file path.
-- Exact source-code line numbers or the smallest practical relevant line range.
-- Relevant function, method, class, route, or configuration key.
-- Source of attacker-controlled or otherwise security-relevant input.
-- Data flow through relevant processing steps.
-- Security-sensitive sink or violated security boundary.
-- Missing, ineffective, or incorrectly implemented security control.
-- Preconditions required for exploitation.
-- Expected security impact.
-- Validation status.
-- Reproducible evidence or an explicit explanation of why runtime validation was not possible.
+PHASE 2: ENDPOINT INVENTORY
 
-Never fabricate source-code line numbers. Obtain them from the actual files and recheck them before generating the final reports.
+Build an inventory of relevant endpoints.
 
-Never describe a vulnerability as confirmed merely because a scanner reports it.
+For each endpoint, identify:
 
-Never treat the presence of a potentially dangerous function as sufficient proof of exploitability.
+- HTTP method and route.
+- Handler and source-code location.
+- Expected authentication requirement.
+- Authorization requirement.
+- Sensitive data or operation involved.
+- Applicable middleware and upstream controls.
+- Potential unauthenticated attack paths.
 
-2.2 Distinguish facts from hypotheses
+Prioritize externally reachable endpoints and privileged operations.
 
-Classify each security observation as one of the following:
+PHASE 3: SOURCE-CODE VULNERABILITY ANALYSIS
 
-- CONFIRMED: The vulnerability is supported by sufficient code and/or runtime evidence.
-- HIGH-CONFIDENCE STATIC FINDING: The vulnerable implementation and relevant data flow are established, but runtime exploitation has not been demonstrated.
-- NEEDS VALIDATION: A plausible weakness exists, but a material condition remains unverified.
-- NOT REPRODUCED: An attempted validation did not demonstrate the suspected behavior.
-- FALSE POSITIVE: Evidence establishes that the reported issue is not a vulnerability under the documented conditions.
-- NOT TESTED: Validation was not performed.
-- NOT APPLICABLE: The security category is not relevant to the identified application or scope.
-
-Do not use the word CONFIRMED for a vulnerability whose essential exploitability conditions remain unproven.
-
-A failed exploit attempt does not automatically establish that a finding is a false positive. Investigate alternative explanations, environmental constraints, authentication requirements, and test limitations.
-
-2.3 No invented testing
-
-Do not invent:
-
-- API endpoints.
-- HTTP methods.
-- Query parameters.
-- Authentication tokens.
-- Session cookies.
-- User identities or roles.
-- Database schemas.
-- Request or response bodies.
-- HTTP status codes.
-- Runtime behavior.
-- Successful exploitation results.
-- Dependency versions.
-- Scanner results.
-- Test execution results.
-
-Discover these details from the repository, available application documentation, configuration, test environments, or actual authorized runtime observations.
-
-When a required value is unavailable, explicitly mark it as unknown or a placeholder.
-
-2.4 Authorization and safety
-
-Conduct testing only against the supplied repository and explicitly authorized environments.
-
-Treat local source-code review as authorized by the task. Do not assume that a production deployment, external service, customer environment, or third-party host is authorized for active testing.
-
-Before runtime testing, establish the available target, authorization, authentication requirements, and testing boundaries.
-
-Do not perform destructive actions, data exfiltration, denial-of-service testing, uncontrolled brute force, production modifications, or unauthorized access.
-
-Use non-destructive proof-of-concept tests and synthetic data wherever possible.
-
-Do not expose real credentials, access tokens, session cookies, private keys, customer information, or other secrets in the reports.
-
-Redact sensitive values from command examples, logs, screenshots, request captures, and generated artifacts.
-
-If a test requires an unavailable environment, account, permission, or approval, document the dependency and continue with the remaining assessment.
-
-Do not claim runtime validation when only static analysis was performed.
-
----
-
-3. INITIAL REPOSITORY DISCOVERY
-
-Before analyzing vulnerabilities, establish the repository's actual structure.
-
-Perform the following steps:
-
-1. Confirm the current working directory.
-2. Identify the repository root and version-control status.
-3. Identify the primary programming languages and frameworks.
-4. Identify frontend, backend, API, worker, scheduled-job, and integration components.
-5. Identify build systems, package managers, dependency manifests, and lockfiles.
-6. Identify application entry points.
-7. Identify routes, controllers, handlers, middleware, filters, and interceptors.
-8. Identify authentication and authorization components.
-9. Identify database clients, ORM models, raw SQL operations, and data-access layers.
-10. Identify template engines, serialization frameworks, file-processing components, and external service clients.
-11. Identify infrastructure-as-code, container, CI/CD, and deployment configurations.
-12. Identify existing tests, security tests, linting rules, and security-scanner configurations.
-13. Identify generated files, vendored dependencies, build outputs, and irrelevant directories.
-14. Identify files that could not be read or analyzed.
-15. Record the commit identifier or repository revision when available.
-
-Use the actual project structure to determine the assessment strategy.
-
-Do not assume that the repository uses a particular framework, architecture, authentication mechanism, database, or deployment platform.
-
-If multiple applications exist in the repository, assess each application and its trust boundaries separately.
-
-Create an inventory of files and components examined.
-
-Record exclusions and justify each exclusion. Do not silently exclude security-relevant source code.
-
-Prioritize handwritten application code, security-sensitive configuration, integration code, and dependency metadata. Inspect third-party code where necessary to establish relevant behavior, but distinguish upstream dependency findings from vulnerabilities in application-owned code.
-
----
-
-4. CREATE A SYSTEMATIC ASSESSMENT PLAN
-
-Before performing the detailed review, create an assessment plan based on the discovered repository.
-
-The plan must include:
-
-- Components to review.
-- Security boundaries.
-- Entry points.
-- Authentication and authorization mechanisms.
-- Sensitive data flows.
-- Externally reachable functionality.
-- Important business operations.
-- Relevant OWASP categories.
-- Relevant CWE weakness classes.
-- Available validation methods.
-- Expected report artifacts.
-
-Maintain a persistent working record, such as:
-
-security_review/
-assessment_scope.md
-repository_inventory.md
-attack_surface.md
-analysis_progress.md
-findings_working.json
-validation_log.md
-coverage_matrix.json
-limitations.md
-
-If creating this directory would conflict with repository conventions, use a clearly named assessment output directory.
-
-Do not overwrite existing project files or previous reports without explicit authorization.
-
-Keep working notes separate from application source code.
-
-Update progress records as components and security categories are assessed.
-
-If the session is interrupted, resume from the recorded progress rather than assuming previous work is complete.
-
----
-
-5. BUILD THE APPLICATION ATTACK SURFACE
-
-Identify every relevant entry point that can influence application behavior.
-
-Investigate, where present:
-
-- HTTP routes and API endpoints.
-- GraphQL queries and mutations.
-- WebSocket handlers.
-- RPC endpoints.
-- Message queues and event consumers.
-- Scheduled jobs.
-- File uploads and downloads.
-- Import and export functionality.
-- Authentication callbacks.
-- SSO and identity-provider integrations.
-- Password reset and account recovery flows.
-- Administrative interfaces.
-- Internal service interfaces.
-- Database-facing operations.
-- Template rendering.
-- Command execution.
-- Deserialization and parsing.
-- Archive extraction.
-- Document and image processing.
-- Webhooks.
-- Third-party callbacks.
-- Configuration-driven functionality.
-- Background workers.
-- Debug and diagnostic endpoints.
-- Error-handling paths.
-
-For each discovered entry point, record:
-
-- HTTP method or invocation type, when applicable.
-- Route or invocation identifier.
-- Handler and associated files.
-- Authentication requirements.
-- Authorization requirements.
-- Input sources.
-- Sensitive operations.
-- Relevant downstream calls.
-- Related tests.
-- Review status.
-
-Do not invent an entry point merely because it is common in similar applications.
-
-Search for routes and invocation paths using the project's actual framework conventions.
-
-If route registration is dynamic, trace the registration mechanism.
-
-Trace middleware ordering and identify whether security checks can be bypassed through alternate routing, error handling, or secondary invocation paths.
-
----
-
-6. COMPREHENSIVE OWASP AND CWE REVIEW
-
-Use the applicable OWASP Top 10 edition and record its exact edition and publication year.
-
-Do not silently mix categories from different editions.
-
-Where the application is an API, separately evaluate applicable OWASP API Security Top 10 categories and record the edition used.
-
-Use CWE identifiers from the official weakness taxonomy when the mapping is supported by the evidence.
-
-Do not force a CWE mapping when the weakness cannot be classified reliably.
-
-6.1 Injection
+Perform cross-file analysis and trace each candidate from the incoming request through the relevant security controls to the sensitive operation.
 
 Investigate:
 
-- SQL injection.
-- Blind SQL injection.
-- Second-order SQL injection.
-- NoSQL injection.
-- LDAP injection.
-- XPath injection.
-- OS command injection.
-- Shell argument injection.
-- Server-side template injection.
-- Expression-language injection.
-- ORM query manipulation.
-- Dynamic query construction.
-- Header injection.
-- Log injection.
-- HTTP response splitting.
-- CRLF injection.
-- XML injection.
-- Unsafe interpreter invocation.
-- Injection through deserialization or dynamic evaluation.
-
-Trace attacker-controlled input to the relevant interpreter or execution sink.
-
-Determine whether parameterization, context-aware encoding, safe APIs, or strict validation actually protects the specific data flow.
-
-Distinguish SQL query injection from unsafe query logic and unauthorized data access.
-
-6.2 Broken Authentication and Identity Management
-
-Investigate:
-
-- Weak authentication enforcement.
-- Authentication bypass.
-- Inconsistent authentication across routes.
-- Incorrect password verification.
-- Weak password-reset workflows.
-- Account enumeration.
-- Insecure account recovery.
-- Session fixation.
-- Session hijacking exposure.
-- Improper session expiration.
-- Missing session invalidation.
-- Insecure remember-me mechanisms.
-- JWT validation failures.
-- Algorithm or key-selection confusion.
-- Missing issuer, audience, expiry, or signature validation where required.
-- Insecure OAuth or OpenID Connect flows.
-- Weak CSRF protections around authentication transitions.
-- MFA enforcement bypass.
-- Password storage weaknesses.
-- Hardcoded credentials.
-- Default credentials.
-- Credential leakage.
-- Insecure API key handling.
-
-Do not flag the absence of a particular authentication technology when the application's documented security requirements do not require it.
-
-6.3 Broken Access Control
-
-Investigate:
-
-- Missing server-side authorization.
-- Horizontal privilege escalation.
-- Vertical privilege escalation.
-- Insecure Direct Object Reference.
-- Broken Object Level Authorization.
-- Broken Function Level Authorization.
-- Broken Object Property Level Authorization.
-- Tenant isolation failures.
-- Unauthorized administrative operations.
-- Unauthorized data export.
-- Unauthorized file access.
-- Mass assignment.
-- Over-posting.
-- Role and permission confusion.
-- Inconsistent authorization across alternate routes.
-- Client-side-only access control.
-- Insecure ownership checks.
-- Unauthorized modification of protected attributes.
-
-Trace authorization from the entry point to the actual protected operation.
-
-Determine whether the application verifies both the requested operation and the caller's authority over the specific object, tenant, or resource.
-
-Where runtime testing is possible, use separate test identities with explicitly documented permissions.
-
-6.4 Cryptographic Failures
-
-Investigate:
-
-- Sensitive information transmitted or stored without adequate protection.
-- Weak or deprecated cryptographic algorithms.
-- Insecure random-number generation.
-- Predictable security tokens.
-- Improper password hashing.
-- Hardcoded encryption keys.
-- Key exposure.
-- Incorrect encryption modes.
-- Insecure key management.
-- Improper certificate validation.
-- TLS configuration weaknesses visible in repository configuration.
-- Sensitive data in logs.
-- Secrets in source control.
-- Weak token generation.
-- Improper cryptographic error handling.
+- Missing or incorrectly configured authentication middleware.
+- Fail-open authentication logic.
+- Incorrect route allowlists.
+- Untrusted identity headers.
+- JWT signature or claim validation errors.
+- Session validation failures.
+- Authentication callback weaknesses.
+- Missing authorization checks.
+- Anonymous access to privileged functionality.
+- Account-recovery weaknesses that permit account takeover.
+- Sensitive data exposure through public endpoints.
+- Object-level and function-level access-control failures with a demonstrable unauthenticated attack path.
 
-Distinguish demonstrable weaknesses from environment-dependent concerns.
+Correlate findings with the effective application configuration whenever possible.
 
-Do not claim a live TLS vulnerability from source code alone unless the relevant configuration and deployment behavior establish it.
+PHASE 4: AUTHORIZED QA HTTP VERIFICATION
 
-6.5 Security Misconfiguration
+Use the explicitly configured QA base URL only when the target and testing scope are established.
 
-Investigate:
+Use curl or another available HTTP client to perform controlled, non-destructive verification.
 
-- Debug mode enabled in inappropriate environments.
-- Verbose error disclosure.
-- Missing or incorrect security headers.
-- Unsafe CORS configuration.
-- Insecure cookie attributes.
-- Insecure default settings.
-- Unnecessary exposed functionality.
-- Misconfigured access controls.
-- Weak file permissions.
-- Insecure container configurations.
-- Overprivileged service accounts.
-- Insecure CI/CD permissions.
-- Exposed diagnostic endpoints.
-- Insecure deserialization settings.
-- Misconfigured framework security controls.
-- Unnecessary services and capabilities.
-- Insecure deployment defaults.
+Example:
 
-Evaluate configuration in its actual context.
+curl -i --max-time 10 
+-H 'Accept: application/json' 
+'https://AUTHORIZED-QA-HOST/KNOWN-TEST-ENDPOINT'
 
-Do not assume that a header is missing at runtime merely because it is absent from an unrelated configuration file.
+Replace the placeholders with the actual authorized QA target and an endpoint discovered during repository analysis.
 
-6.6 Vulnerable and Outdated Components
+For each candidate:
 
-Inspect dependency manifests, lockfiles, and relevant build configurations.
+1. Send a request without authentication credentials.
+2. Inspect the HTTP status, response headers, response body, and redirects.
+3. Determine whether the endpoint exposes protected information or permits an unauthorized operation.
+4. Compare the result with the source-code execution path and intended access-control requirements.
+5. Capture sanitized evidence.
+6. Distinguish confirmed vulnerabilities from candidates requiring further verification.
 
-Identify:
+Use non-mutating requests first. Test state-changing operations only when explicitly permitted, with approved disposable test data and appropriate safeguards.
 
-- Direct dependencies.
-- Transitive dependencies where dependency data is available.
-- Known vulnerabilities.
-- Vulnerable version ranges.
-- Version constraints.
-- Available fixed versions.
-- Reachability evidence.
-- Whether vulnerable functionality is used.
-- Runtime and build-time exposure.
-- Dependency confusion or unsafe source configuration risks.
-- Integrity and provenance concerns where evidence exists.
-- Unsupported components where support status can be established.
+Do not send requests to production, unrelated systems, or unverified targets.
 
-Use available scanners and vulnerability databases when configured and accessible.
+Do not perform brute-force attacks, denial-of-service testing, destructive operations, or unauthorized access to real user data.
 
-Record the database or scanner source and the date of the assessment.
+If network access or command execution is blocked by the current Codex configuration, report the restriction and continue with source-code analysis. Do not claim that dynamic testing succeeded when it did not.
 
-Do not invent CVEs, affected versions, fixed versions, CVSS scores, or exploit availability.
+PHASE 5: TOOL EXECUTION
 
-Do not classify a dependency as vulnerable solely because it is old.
+Use the tools already available in the workspace, including:
 
-Do not claim a dependency is safe merely because a scanner returned no results.
+- Shell commands.
+- curl.
+- Existing test runners.
+- Framework route-inspection utilities.
+- Static analysis tools.
+- Existing HTTP test clients.
 
-If network access or a vulnerability database is unavailable, explicitly record that limitation.
+Avoid unnecessary dependency installation or configuration changes.
 
-6.7 Identification and Authentication Failures
+When a tool operation requires approval, request it through the supported Codex mechanism.
 
-For frameworks or OWASP editions where identity failures are classified separately, map the relevant weaknesses accordingly.
+Do not repeatedly execute a command that has been denied without addressing the underlying permission restriction.
 
-Avoid double-counting the same underlying vulnerability as multiple independent findings merely because it belongs to several overlapping categories.
+Do not disable security safeguards or attempt to evade command restrictions.
 
-Use one primary finding with additional relevant taxonomy mappings when appropriate.
+PHASE 6: SEVERITY AND VALIDATION
 
-6.8 Software and Data Integrity Failures
+Evaluate each candidate based on:
 
-Investigate:
+- Required attacker privileges.
+- Attack complexity.
+- Confidentiality impact.
+- Integrity impact.
+- Availability impact.
+- Number and sensitivity of affected resources.
+- Practical exploitability.
+- Existing compensating controls.
 
-- Unsafe deserialization.
-- Trusting unverified update sources.
-- Unverified plugin loading.
-- Insecure software update mechanisms.
-- Unsigned or improperly verified artifacts.
-- Unsafe CI/CD workflows.
-- Dependency integrity failures.
-- Untrusted code execution.
-- Insecure build scripts.
-- Integrity validation bypasses.
-- Unsafe dynamic module loading.
-
-Demonstrate the relevant trust boundary and the missing or ineffective integrity control.
-
-6.9 Security Logging and Monitoring Failures
-
-Investigate:
+Use CVSS 4.0 or the organization's established severity methodology when sufficient evidence is available.
 
-- Missing security-event logging for important operations.
-- Missing audit trails.
-- Sensitive information in logs.
-- Log injection.
-- Insufficient security-relevant context.
-- Improper exception handling.
-- Missing alerting integration where explicitly required.
-- Authentication and authorization events that are not recorded.
-- Audit-log modification or deletion weaknesses.
+Include a finding in the Critical or High section only when its impact supports that classification.
 
-Do not treat the absence of a specific logging product as a vulnerability by itself.
+Classify findings as:
 
-Differentiate code-level evidence from operational monitoring requirements that cannot be established from the repository.
+- CONFIRMED: Exploitability and qualifying impact demonstrated.
+- STRONGLY SUPPORTED: Source-code evidence supports the issue, but complete dynamic verification was unavailable.
+- UNCONFIRMED: Additional evidence is needed.
 
-6.10 Server-Side Request Forgery
+Do not represent unconfirmed issues as verified vulnerabilities.
 
-Investigate user-influenced URL fetching, redirects, callbacks, webhooks, image retrieval, document retrieval, and external integration clients.
+PHASE 7: FINAL REPORT
 
-Analyze:
+Produce the following sections:
 
-- URL parsing and normalization.
-- Hostname validation.
-- IP address resolution.
-- Redirect behavior.
-- IPv4 and IPv6 handling.
-- Loopback and private-network restrictions.
-- Cloud metadata access risks where relevant.
-- DNS rebinding considerations.
-- Scheme restrictions.
-- Proxy behavior.
-- Allowlist enforcement.
-- Time-of-check/time-of-use issues.
+1. Executive Summary
 
-Validate with safe, controlled test endpoints when authorized.
+- Application assessed.
+- QA target, if dynamic testing was performed.
+- Number of Critical findings.
+- Number of High findings.
+- Verification status and limitations.
 
-Do not access cloud metadata services, internal production services, or other sensitive targets to prove a finding.
-
-6.11 OWASP API Security
-
-Where APIs exist, assess applicable categories, including:
-
-- Broken Object Level Authorization.
-- Broken Authentication.
-- Broken Object Property Level Authorization.
-- Unrestricted Resource Consumption.
-- Broken Function Level Authorization.
-- Unrestricted Access to Sensitive Business Flows.
-- Server-Side Request Forgery.
-- Security Misconfiguration.
-- Improper Inventory Management.
-- Unsafe Consumption of APIs.
-
-Verify the edition and category names before finalizing the mapping.
-
-Investigate pagination, filtering, sorting, batch operations, nested objects, bulk updates, and alternate API versions.
-
-Check whether security controls are enforced consistently across equivalent operations.
-
-6.12 Additional Application-Specific Weaknesses
-
-Also investigate relevant weaknesses involving:
-
-- Cross-Site Scripting.
-- Cross-Site Request Forgery.
-- Clickjacking.
-- Open redirects.
-- Path traversal.
-- File upload and download.
-- ZIP Slip and archive extraction.
-- XML External Entity processing.
-- Prototype pollution.
-- Race conditions.
-- Time-of-check/time-of-use vulnerabilities.
-- Business logic abuse.
-- Insecure multi-tenancy.
-- Information disclosure.
-- Cache poisoning.
-- Cache deception.
-- Request smuggling where the architecture and evidence justify review.
-- HTTP parameter pollution.
-- ReDoS and algorithmic complexity.
-- Denial-of-service risks from unbounded application operations.
-- Unsafe regular expressions.
-- Insecure temporary files.
-- Improper permission checks.
-- Improper input validation.
-- Memory-safety issues in relevant languages.
-- Unsafe native interfaces.
-- Insecure inter-process communication.
-- Secrets in source code or configuration.
-- Weak security controls in custom integrations.
-
-Use the official CWE taxonomy and applicable OWASP references to map supported findings.
-
-The above categories are investigation areas, not assumptions that the repository contains these weaknesses.
-
----
-
-7. MANDATORY AUTHENTICATION AND AUTHORIZATION DEEP REVIEW
-
-Treat authentication and authorization as priority review areas.
-
-Review every discovered security-sensitive route, operation, and data-access path.
-
-For each operation, determine:
-
-1. How the caller's identity is established.
-2. Whether authentication is mandatory.
-3. How the caller's roles and permissions are derived.
-4. Whether the required permission is checked server-side.
-5. Whether object ownership is verified.
-6. Whether tenant boundaries are enforced.
-7. Whether the requested properties can be modified safely.
-8. Whether alternate routes provide access to the same operation.
-9. Whether background jobs and internal service calls use appropriate trust boundaries.
-10. Whether authentication and authorization errors fail safely.
-
-Trace the complete chain:
-
-UNTRUSTED INPUT
--> ROUTE OR ENTRY POINT
--> AUTHENTICATION
--> AUTHORIZATION
--> BUSINESS LOGIC
--> SERVICE LAYER
--> DATA ACCESS
--> SENSITIVE OPERATION
--> RESPONSE OR SIDE EFFECT
-
-Adapt this chain to the actual architecture.
-
-Do not assume that a security check exists merely because a function is named authorize, authenticate, validate, secure, or checkPermission.
-
-Inspect the implementation and determine whether it protects the actual operation.
-
-Search for alternate code paths that bypass the expected checks.
-
-Investigate negative authorization cases, including access to another user's object, unauthorized role transitions, cross-tenant access, protected-field modification, and administrative functionality.
-
-Do not create real unauthorized accounts, access other users' production data, or alter production records.
-
-If runtime verification requires two users or roles, use authorized test identities and synthetic data.
-
----
-
-8. CROSS-FILE TAINT AND DATA-FLOW ANALYSIS
-
-Do not limit analysis to individual files.
-
-For every high-risk input source, trace data through the application until its security-sensitive use or termination.
-
-Potential sources include:
-
-- HTTP parameters.
-- Request bodies.
-- Headers.
-- Cookies.
-- Path variables.
-- Uploaded files.
-- Database records influenced by users.
-- Queue messages.
-- Environment variables.
-- Configuration files.
-- External API responses.
-- Webhook payloads.
-- Deserialized objects.
-- User-controlled filenames.
-- Template variables.
-
-Potential sinks include:
-
-- SQL execution.
-- Command execution.
-- HTML rendering.
-- Template evaluation.
-- File system operations.
-- URL fetching.
-- Redirects.
-- Deserialization.
-- Dynamic evaluation.
-- LDAP and other query interpreters.
-- HTTP response construction.
-- Sensitive data access.
-- Security-critical state changes.
-
-For each relevant flow, record:
-
-SOURCE -> TRANSFORMATION -> VALIDATION -> SANITIZATION OR ENCODING -> SECURITY CHECK -> SINK
-
-Evaluate:
-
-- Whether tainted input reaches the sink.
-- Whether the transformation preserves attacker-controlled influence.
-- Whether validation is appropriate for the expected context.
-- Whether encoding is applied at the correct output boundary.
-- Whether parameterization is used correctly.
-- Whether authorization applies to the specific object and operation.
-- Whether a guard can be bypassed.
-- Whether the security check occurs before or after the sensitive operation.
-- Whether alternate call paths change the conclusion.
-
-Inspect callers, callees, inherited methods, framework hooks, middleware, interceptors, utility functions, shared libraries, and configuration-driven behavior.
-
-When a value crosses files, preserve the actual call-chain evidence.
-
-Do not claim complete taint analysis if the language, framework, dynamic dispatch, reflection, generated code, or incomplete dependencies prevent reliable tracing.
-
-Record those limitations and the affected components.
-
----
-
-9. ANALYSIS WORKFLOW AND TOOL USAGE
-
-Use Codex CLI capabilities and available local tools to improve coverage.
-
-Start with repository inspection and targeted searches.
-
-Then perform multiple complementary analysis passes.
-
-Pass A: Architecture and entry-point discovery
-
-Map the repository, components, routes, trust boundaries, and important operations.
-
-Pass B: Static source-code analysis
-
-Inspect relevant files, security-sensitive functions, data flows, and configurations.
-
-Use targeted searches for dangerous functions and patterns, but never rely solely on keyword matches.
-
-Pass C: Authentication and authorization
-
-Review all discovered protected operations and alternate paths.
-
-Pass D: Injection and interpreter boundaries
-
-Trace untrusted inputs to queries, templates, commands, parsers, and other sensitive sinks.
-
-Pass E: Data protection and secrets
-
-Inspect sensitive-data handling, cryptography, secrets, logging, and error handling.
-
-Pass F: Dependencies and deployment configuration
-
-Inspect dependency metadata, containers, infrastructure, CI/CD, and runtime configuration.
-
-Pass G: Business logic
-
-Understand workflows and determine whether security-sensitive transitions can be abused.
-
-Pass H: Independent verification
-
-Re-examine each candidate finding and challenge the original conclusion.
-
-Try to disprove each finding using actual evidence, including:
-
-- Effective validation.
-- Safe parameterization.
-- Correct authorization checks.
-- Framework-enforced protections.
-- Unreachable code.
-- Incorrect assumptions about attacker control.
-- Environmental restrictions.
-- Relevant compensating controls.
-
-Do not dismiss a vulnerability based on a compensating control unless the control demonstrably protects the specific path.
-
-Pass I: Validation
-
-Use appropriate static tests, unit tests, integration tests, dynamic testing, or controlled proof-of-concept requests.
-
-Pass J: Reporting and completeness checks
-
-Verify finding evidence, severity, mappings, validation status, report consistency, and coverage.
-
-Use available tools only when appropriate.
-
-Potential tools include language-specific analyzers, Semgrep, CodeQL when available and configured, dependency scanners, secret scanners, test runners, and HTTP clients.
-
-Do not assume that a tool is installed or operational.
-
-Check tool availability before use.
-
-Record the tool name, version when available, execution date, relevant command, and result.
-
-Do not report a scan as completed when the command failed, timed out, or did not cover the intended files.
-
-Do not run expensive or broad scans repeatedly without a reason.
-
-If a scanner identifies a finding, independently inspect the underlying code before including it in the confirmed vulnerability register.
-
----
-
-10. RUNTIME VALIDATION WITH cURL AND BROWSER DEVELOPER TOOLS
-
-For every finding that can reasonably be validated through an HTTP interface, provide an appropriate reproduction procedure.
-
-Do not assume that every vulnerability is externally reachable or suitable for cURL-based testing.
-
-10.1 Discover actual requests
-
-Derive endpoint details from:
-
-- Route definitions.
-- API documentation.
-- Integration tests.
-- Existing request collections.
-- Application configuration.
-- Authorized browser Network captures.
-- Actual test-environment observations.
-
-Use real endpoint paths and HTTP methods established by evidence.
-
-10.2 cURL evidence
-
-Where applicable, provide:
-
-- The endpoint.
-- The HTTP method.
-- Required headers.
-- Required content type.
-- Authentication placeholders.
-- A minimal request body.
-- A safe test payload.
-- Expected secure behavior.
-- The observed result, if actually tested.
-- The interpretation of the result.
-- Cleanup steps if state changes are involved.
-
-Use placeholders for unavailable values:
-
-<AUTHORIZED_TEST_BASE_URL>
-<AUTHORIZED_TEST_TOKEN>
-<AUTHORIZED_TEST_OBJECT_ID>
-
-These are placeholders, not real discovered values.
-
-Do not place real secrets in generated reports.
-
-Do not fabricate an observed response.
-
-For example, if a suspected authorization issue concerns object access, provide a controlled test procedure using two authorized test identities and synthetic objects.
-
-Compare:
-
-- Access by the object's authorized owner.
-- Access by a user who should not have permission.
-- Access by an appropriately privileged administrative identity, where relevant.
-
-Record the actual results only after execution.
-
-10.3 Browser Developer Tools
-
-When browser testing is appropriate, document:
-
-1. Open the authorized test application.
-2. Open Developer Tools.
-3. Select the Network tab.
-4. Reproduce the relevant application action.
-5. Identify the actual request.
-6. Inspect the request URL, method, headers, cookies, and body.
-7. Inspect the response status, headers, and body.
-8. Use the browser's request-copying feature when available.
-9. Redact sensitive values before saving evidence.
-10. Repeat the test with an authorized test account that should lack the relevant permission.
-
-Use actual requests observed in the test environment.
-
-Do not suggest that a successful request copied from Developer Tools proves a vulnerability by itself.
-
-Explain what behavior would demonstrate the security failure.
-
-10.4 Non-HTTP vulnerabilities
-
-For weaknesses that cannot be demonstrated using cURL or browser Developer Tools, provide the most appropriate validation method, such as:
-
-- A unit test.
-- An integration test.
-- A controlled command-line proof of concept.
-- A dependency verification procedure.
-- A configuration inspection.
-- A test harness.
-- A reproducible static-analysis trace.
-
-Explain why cURL or browser testing is not applicable.
-
-10.5 Validation results
-
-For every attempted test, record:
-
-- Test identifier.
-- Associated finding identifier.
-- Environment.
-- Date and time.
-- Preconditions.
-- Test procedure.
-- Expected result.
-- Actual result.
-- Evidence location.
-- Outcome.
-- Limitations.
-
-Never invent a successful request, HTTP response, screenshot, log, or test result.
-
-If the target environment is unavailable, provide a clearly labeled validation procedure without claiming execution.
-
----
-
-11. SEVERITY AND RISK SCORING
-
-Assess each finding using a documented, consistent severity methodology.
-
-Use CVSS v4.0 when sufficient technical evidence exists to calculate an appropriate score. If organizational policy mandates another version, record and follow that policy instead.
-
-Use the official CVSS specification and scoring guidance.
-
-Do not fabricate a score to make a finding appear more serious.
-
-Record:
-
-- Severity.
-- CVSS version.
-- CVSS score, when supportable.
-- CVSS vector, when calculated.
-- Exploit prerequisites.
-- Required privileges.
-- User interaction requirements.
-- Technical impact.
-- Business impact.
-- Affected assets.
-- Exposure and reachability.
-- Confidence.
-- Relevant compensating controls.
-
-Distinguish technical severity from business risk.
-
-Use the following severity bands only as the reporting convention unless the organization's established policy specifies different thresholds:
-
-- CRITICAL: 9.0–10.0.
-- HIGH: 7.0–8.9.
-- MEDIUM: 4.0–6.9.
-- LOW: 0.1–3.9.
-- INFORMATIONAL: No applicable CVSS score or no demonstrated security impact.
-
-These numeric bands are an organizational reporting convention, not a replacement for the official CVSS severity-rating system. Document any differences.
-
-A zero score, unavailable score, or uncalculated score must not be silently treated as LOW.
-
-Where a numeric score is unavailable, assign a provisional severity only when justified and explicitly label it provisional.
-
-Prioritize findings using both technical severity and business context.
-
-Pay particular attention to:
-
-- Authentication bypass.
-- Privilege escalation.
-- Unauthorized sensitive-data access.
-- Cross-tenant data exposure.
-- Remote code execution.
-- SQL injection.
-- Command injection.
-- SSRF with meaningful impact.
-- Insecure deserialization with demonstrated security consequences.
-- Critical cryptographic or secret-management failures.
-- High-impact business logic abuse.
-
-Do not automatically classify every instance of these weakness types as CRITICAL or HIGH. Evaluate the actual exploitability and impact.
-
----
-
-12. FINDING IDENTIFICATION, DEDUPLICATION, AND TRACEABILITY
-
-Assign each finding a stable identifier, such as:
-
-APPSEC-001
-APPSEC-002
-APPSEC-003
-
-Each finding must include:
-
-- Finding ID.
-- Title.
-- Primary CWE.
-- Additional CWE mappings where justified.
-- Applicable OWASP mapping.
-- Severity.
-- Validation status.
-- Confidence.
-- Affected component.
-- Affected file and line range.
-- Entry point.
-- Source-to-sink path, where relevant.
-- Root cause.
-- Technical explanation.
-- Preconditions.
-- Reproduction procedure.
-- Evidence.
-- Impact.
-- Remediation.
-- Regression-test recommendation.
-
-Deduplicate findings that represent the same root cause and vulnerable code path.
-
-Do not merge distinct vulnerabilities simply because they share the same CWE.
-
-If one root cause affects multiple endpoints, document all affected endpoints and explain whether they should be represented as one finding or multiple findings.
-
-Maintain consistent finding identifiers across:
-
-- Excel.
-- HTML.
-- JSON working records.
-- Validation logs.
-- Evidence files.
-- Remediation tracking.
-
-Ensure every reported finding has a corresponding evidence record.
-
----
-
-13. REMEDIATION REQUIREMENTS
-
-For every finding, recommend a concrete fix appropriate to the actual implementation.
-
-Prefer fixes that eliminate the root cause.
-
-Examples include:
-
-- Parameterized queries instead of unsafe query concatenation.
-- Correct server-side authorization checks.
-- Object ownership and tenant-boundary enforcement.
-- Context-aware output encoding.
-- Safe file path resolution and allowlisting.
-- Strict URL validation and controlled outbound requests.
-- Secure session handling.
-- Appropriate cryptographic primitives and key management.
-- Safe deserialization.
-- Dependency upgrades to verified fixed versions.
-- Secure configuration.
-- Removal of hardcoded secrets.
-- Correct security headers and cookie attributes.
-- Bounded resource consumption.
-
-Do not recommend a particular API, library, version, or configuration option without verifying that it is appropriate for the project's technology and version.
-
-Where possible, include:
-
-- Root cause.
-- Recommended change.
-- Example of a safe implementation pattern.
-- Affected files.
-- Potential compatibility impact.
-- Regression-test cases.
-- Verification steps.
-- Remediation priority.
-
-If an exact patch is requested, make the smallest appropriate change, follow existing project conventions, and avoid unrelated modifications.
-
-Do not silently change application code during a review-only assessment.
-
-If source modifications are not authorized, provide recommendations without modifying the application.
-
----
-
-14. EXCEL DELIVERABLE
-
-Generate a stakeholder-ready Excel workbook named:
-
-Application_Security_Assessment.xlsx
-
-Use a real spreadsheet-generation library available in the environment.
-
-The workbook must be professionally formatted, filterable, readable, and suitable for remediation tracking.
-
-Include the following worksheets.
-
-Sheet 1: Executive Summary
-
-Include:
-
-- Project or repository name.
-- Assessment date.
-- Repository revision when available.
-- Scope.
-- Assessment methodology.
-- Total findings.
-- Confirmed findings.
-- High-confidence static findings.
-- Findings needing validation.
-- Findings not reproduced.
-- False positives.
-- Findings by severity.
-- Findings by validation status.
-- Major security themes.
-- Important assessment limitations.
-- Recommended immediate actions.
-
-Do not count a finding more than once in the same aggregate.
-
-Clearly define which statuses are included in each metric.
-
-Sheet 2: Vulnerability Register
-
-Include these columns:
-
-1. Finding ID
-2. Title
-3. Description
-4. Severity
-5. CVSS Version
-6. CVSS Score
-7. CVSS Vector
-8. Confidence
-9. Validation Status
-10. Primary CWE
-11. Additional CWE
-12. OWASP Mapping
-13. Affected Application
-14. Affected Component
-15. Entry Point
-16. HTTP Method
-17. Repository-Relative File Path
-18. Start Line
-19. End Line
-20. Vulnerable Function or Method
-21. Source-to-Sink Trace
-22. Root Cause
-23. Exploit Preconditions
-24. Technical Impact
-25. Business Impact
-26. Evidence Reference
-27. Reproduction Procedure
-28. cURL Applicability
-29. Browser Developer Tools Applicability
-30. Recommended Remediation
-31. Regression-Test Recommendation
-32. Remediation Priority
-33. Finding Owner
-34. Target Remediation Date
-35. Retest Status
-36. Notes
-
-Leave unknown ownership, remediation dates, and retest results blank or explicitly marked TBD.
-
-Do not invent organizational assignments.
-
-Sheet 3: Validation Evidence
-
-Include:
-
-- Test ID.
-- Finding ID.
-- Environment.
-- Preconditions.
-- Test method.
-- Request or test procedure.
-- Expected behavior.
-- Actual observed behavior.
-- Execution status.
-- Evidence file reference.
-- Date.
-- Limitations.
-
-Distinguish executed tests from proposed tests.
-
-Sheet 4: OWASP Coverage
-
-Include:
-
-- OWASP edition.
-- Category identifier.
-- Category name.
-- Applicability.
-- Review status.
-- Files or components reviewed.
-- Findings identified.
-- Validation status.
-- Remaining gaps.
-- Notes.
-
-Include applicable OWASP Top 10 categories and applicable API Security categories as separate coverage sets.
-
-Sheet 5: CWE Coverage
-
-Include:
-
-- CWE ID.
-- CWE name.
-- Why it is relevant.
-- Review status.
-- Findings mapped.
-- Validation status.
-- Coverage limitations.
-
-Include CWEs actually investigated or mapped. Do not claim exhaustive review of every CWE merely because the worksheet exists.
-
-Sheet 6: Component Inventory
-
-Include:
-
-- Component.
-- Language or technology.
-- Relevant files.
-- Entry points.
-- Security controls.
-- Review status.
-- Identified risks.
-- Remaining gaps.
-
-Sheet 7: Dependency Findings
-
-Include:
-
-- Package name.
-- Ecosystem.
-- Installed or resolved version.
-- Direct or transitive status.
-- Advisory or CVE.
-- Affected version range.
-- Fixed version, if verified.
-- Severity.
-- Reachability assessment.
-- Evidence source.
-- Recommended action.
-- Validation status.
-
-Only include verified dependency information.
-
-Sheet 8: Remediation Plan
-
-Include:
-
-- Finding ID.
-- Severity.
-- Remediation priority.
-- Root cause.
-- Recommended fix.
-- Required action.
-- Suggested verification test.
-- Owner.
-- Target date.
-- Status.
-
-Leave unknown owner and target date blank or TBD.
-
-Sheet 9: Assessment Limitations
-
-Document:
-
-- Unavailable environments.
-- Unavailable credentials.
-- Inaccessible files.
-- Unsupported languages or frameworks.
-- Failed tools.
-- Incomplete scans.
-- Missing dependency metadata.
-- Untested routes.
-- Runtime validation gaps.
-- Other material limitations.
-
-Workbook quality requirements
-
-- Freeze header rows.
-- Enable filters.
-- Use readable column widths.
-- Wrap long descriptions.
-- Apply consistent severity formatting.
-- Use clear date and numeric formats.
-- Keep headers visible during scrolling.
-- Avoid merged cells in filterable data tables.
-- Use hyperlinks to local evidence files where practical.
-- Validate workbook formulas and references.
-- Verify that all finding IDs are consistent.
-- Ensure the workbook opens successfully.
-
-Treat all source-derived strings as untrusted spreadsheet content.
-
-Prevent formula injection by safely encoding values beginning with formula-triggering characters such as =, +, -, or @ when necessary.
-
-Do not place secrets or sensitive customer data in the workbook.
-
----
-
-15. HTML DELIVERABLE
-
-Generate a professional report named:
-
-Application_Security_Assessment.html
-
-The report must be self-contained and open locally in a modern browser without requiring an external server.
-
-Include embedded CSS and JavaScript only when necessary.
-
-Do not require external CDN assets, remote fonts, or third-party scripts.
-
-The HTML must contain:
-
-Section 1: Report Cover
-
-- Report title.
-- Repository name.
-- Assessment date.
-- Repository revision, when available.
-- Assessment scope.
-- Confidentiality classification, if provided by the user or organization.
-
-Do not invent a company name, logo, client name, or classification.
-
-Section 2: Executive Summary
-
-Explain the assessment objective, key results, significant risks, and recommended actions in language suitable for management.
-
-Separate confirmed vulnerabilities from static findings and unresolved hypotheses.
-
-Section 3: Assessment Scope and Methodology
-
-Describe:
-
-- Repository coverage.
-- Analysis methods.
-- Tools actually used.
-- OWASP editions.
-- CWE mapping approach.
-- Severity methodology.
-- Runtime validation performed.
-- Limitations.
-
-Section 4: Findings Dashboard
-
-Show:
-
-- Total unique findings.
-- Findings by severity.
-- Findings by validation status.
-- OWASP category distribution.
-- Most significant risks.
-- Unresolved validation items.
-
-All counts must be generated from the actual findings dataset.
-
-Do not hardcode example counts.
-
-Section 5: Vulnerability Details
+2. Critical Findings
 
 For each finding, include:
 
-- Finding ID.
-- Title.
-- Severity.
-- Confidence.
-- Validation status.
-- CWE mapping.
-- OWASP mapping.
-- Affected component.
-- Source file and line range.
-- Technical explanation.
+- Title and CWE.
+- Affected endpoint and HTTP method.
+- Source-code file, function, and line references.
 - Root cause.
-- Exploit preconditions.
+- Unauthenticated attack scenario.
 - Security impact.
-- Evidence.
-- Reproduction steps.
-- Safe cURL example, when applicable.
-- Browser Developer Tools procedure, when applicable.
-- Remediation.
-- Regression tests.
-- Validation limitations.
+- Evidence and verification status.
+- Sanitized reproduction request, when available.
+- Recommended remediation.
 
-Escape all untrusted content before inserting it into HTML.
+3. High Findings
 
-Do not insert source-code-derived content into executable JavaScript or raw HTML without appropriate contextual encoding.
+Use the same structure.
 
-Section 6: OWASP Coverage Matrix
+4. Endpoint Coverage Matrix
 
-Show all applicable categories and their actual review statuses.
+Include endpoint, method, expected authentication, observed result, severity, and verification status.
 
-Make incomplete categories visible.
+5. Unverified Candidates
 
-Section 7: CWE Coverage
+List promising candidates that could not be verified and explain why.
 
-Show investigated CWE weaknesses and the findings mapped to them.
+6. Excluded Findings
 
-Clearly distinguish investigated weaknesses from the full CWE catalog.
+Briefly explain candidates that fall outside scope, are below the severity threshold, or lack sufficient evidence.
 
-Section 8: Validation Evidence
+7. Remediation Plan
 
-Show actual test results and clearly labeled unexecuted procedures.
+Prioritize the fixes and provide regression-test recommendations.
 
-Where evidence files exist, link to them using safe relative paths.
+EXECUTION REQUIREMENTS
 
-Do not create links to nonexistent evidence.
+Do not stop after producing a plan.
 
-Section 9: Remediation Roadmap
+Inspect the repository, identify relevant endpoints, trace security controls, investigate candidate vulnerabilities, and execute all feasible authorized tests.
 
-Organize actions by urgency and risk.
+If a particular command, network request, or testing phase is blocked, document the exact blocker and continue with the remaining work.
 
-Provide suggested verification steps and regression-testing guidance.
+Be thorough, evidence-driven, and skeptical. Minimize false positives.
 
-Section 10: Limitations and Residual Risk
-
-Document untested paths, unavailable environments, incomplete scans, and unresolved hypotheses.
-
-HTML usability requirements
-
-- Professional visual design.
-- Clear typography and spacing.
-- Responsive layout.
-- Accessible color contrast.
-- Severity badges.
-- Searchable findings.
-- Filter by severity and validation status.
-- Expandable finding details.
-- Clickable navigation.
-- Readable code snippets.
-- Printable layout.
-- No unnecessary animations.
-- No external dependencies.
-- No unsafe HTML rendering.
-- No hidden findings omitted from the underlying report.
-
-Provide a clear distinction between security findings and assessment coverage gaps.
-
-Ensure that the HTML and Excel contain consistent finding identifiers, counts, severities, mappings, and statuses.
-
----
-
-16. OPTIONAL MACHINE-READABLE DELIVERABLE
-
-Also generate:
-
-Application_Security_Assessment.json
-
-Use a documented JSON structure containing:
-
-- Assessment metadata.
-- Repository inventory summary.
-- Findings.
-- Evidence.
-- Validation records.
-- OWASP coverage.
-- CWE mappings.
-- Dependency findings.
-- Remediation recommendations.
-- Limitations.
-
-Validate the JSON against its intended schema or at minimum parse it successfully.
-
-Use this dataset as the source of truth for generating the Excel and HTML deliverables.
-
-Avoid maintaining independent copies of findings that can drift apart.
-
----
-
-17. FINAL QUALITY GATES
-
-Before declaring the assessment complete, execute a final verification pass.
-
-Gate A: Repository coverage
-
-Verify that:
-
-- All discovered first-party source files were reviewed or have documented exclusions.
-- All relevant entry points were examined.
-- Important security-sensitive files were reviewed.
-- Cross-file call paths were investigated where relevant.
-- Unreadable or unsupported files are documented.
-- Generated and vendored files are handled transparently.
-
-Gate B: Vulnerability evidence
-
-For every finding, verify that:
-
-- The finding exists in the actual repository or observed environment.
-- File paths are correct.
-- Line numbers are current.
-- The described behavior matches the implementation.
-- Preconditions are explicit.
-- The impact is supported by evidence.
-- The severity is justified.
-- The CWE and OWASP mappings are appropriate.
-- The validation status is accurate.
-- Remediation addresses the actual root cause.
-
-Gate C: False-positive reduction
-
-Challenge every finding.
-
-Look for effective validation, parameterization, framework controls, authorization checks, unreachable paths, and incorrect assumptions.
-
-Update findings based on evidence.
-
-Do not retain a finding merely because it was reported by a scanner.
-
-Gate D: Validation integrity
-
-Verify that:
-
-- Executed tests are distinguished from proposed tests.
-- No test result was fabricated.
-- cURL examples use actual discovered routes where known.
-- Unknown values are clearly marked as placeholders.
-- Sensitive values are redacted.
-- Destructive or unauthorized tests were not performed.
-- Failed or inconclusive tests are described honestly.
-
-Gate E: Report consistency
-
-Verify that:
-
-- Excel opens successfully.
-- HTML opens successfully.
-- JSON parses successfully, if generated.
-- Finding identifiers match across all artifacts.
-- Counts are consistent.
-- Severity distributions are consistent.
-- Coverage statuses match the working records.
-- No finding has been silently omitted.
-- Links point to existing evidence.
-- Sensitive information is not disclosed.
-- Spreadsheet formula injection is prevented.
-- HTML injection is prevented.
-
-Gate F: Residual-risk statement
-
-The final report must explicitly state that the assessment's completeness is limited by the repository, tools, analysis methods, available environments, permissions, and validation evidence.
-
-Never claim that all possible vulnerabilities have been found.
-
-Never claim that the application is secure solely because no vulnerabilities were identified.
-
----
-
-18. EXECUTION STRATEGY
-
-Execute the assessment systematically.
-
-Do not stop after generating a list of potential vulnerabilities.
-
-Do not stop after the first successful scan.
-
-Do not stop after finding a few critical vulnerabilities.
-
-Do not generate empty, fabricated, or placeholder reports and present them as completed assessments.
-
-Proceed in this order:
-
-1. Inspect the repository.
-2. Establish scope and authorization boundaries.
-3. Inventory components and entry points.
-4. Create the coverage plan.
-5. Analyze source code and configuration.
-6. Perform cross-file data-flow analysis.
-7. Conduct the dedicated authentication and authorization review.
-8. Investigate applicable OWASP and CWE categories.
-9. Examine dependencies and deployment configuration.
-10. Perform independent finding verification.
-11. Validate findings through authorized testing where feasible.
-12. Document untested findings and limitations.
-13. Finalize the finding register.
-14. Generate Excel.
-15. Generate HTML.
-16. Generate JSON, if supported.
-17. Run the final quality gates.
-18. Report the results honestly.
-
-Use iterative passes. If the repository is large, divide it into manageable components and maintain progress records.
-
-If context or execution limits are reached, preserve progress and continue in subsequent passes.
-
-Do not silently skip files to finish faster.
-
-Do not claim completion until the planned assessment has been executed to the extent possible and all remaining gaps are documented.
-
----
-
-19. FINAL RESPONSE FORMAT
-
-After the assessment, provide a concise but complete execution summary containing:
-
-Assessment Overview
-
-- Repository name.
-- Revision, if available.
-- Assessment scope.
-- Tools actually used.
-- Assessment completion status.
-
-Findings Summary
-
-- Total unique findings.
-- Confirmed findings.
-- High-confidence static findings.
-- Findings requiring validation.
-- Findings not reproduced.
-- Findings by severity.
-- Most significant confirmed risks.
-
-Coverage Summary
-
-- Components reviewed.
-- Entry points reviewed.
-- Applicable OWASP categories reviewed.
-- CWE weaknesses investigated.
-- Files excluded or not reviewed.
-- Important analysis limitations.
-
-Validation Summary
-
-- Tests actually executed.
-- Findings reproduced.
-- Findings not reproduced.
-- Tests not executed.
-- Runtime access limitations.
-
-Generated Artifacts
-
-Provide the exact paths to:
-
-- Application_Security_Assessment.xlsx
-- Application_Security_Assessment.html
-- Application_Security_Assessment.json, if generated.
-- Supporting evidence and working records.
-
-Remaining Actions
-
-List any unresolved critical or high-risk findings, required retesting, missing permissions, and material coverage gaps.
-
-If no confirmed vulnerabilities are found, say so explicitly while distinguishing that result from proof of security.
-
-Begin by inspecting the repository and establishing the actual scope. Then execute the assessment and generate the deliverables.
+The final report must focus on unauthenticated Critical and High authentication/authorization vulnerabilities and clearly distinguish static-analysis findings from dynamically verified vulnerabilities.
